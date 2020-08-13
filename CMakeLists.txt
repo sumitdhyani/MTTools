@@ -16,6 +16,10 @@ if(NOT TARGET CommonUtils)
 	execute_process(COMMAND git clone https://github.com/sumitdhyani/CommonUtils.git "${CMAKE_SOURCE_DIR}/CommonUtils")
 endif()
 
+if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+	add_subdirectory(CommonUtils)	
+endif()
+
 project(MTTools)
 add_library("${PROJECT_NAME}" STATIC  WorkerThread.cpp
 Timer.cpp
