@@ -30,6 +30,6 @@ ConditionVariable.cpp
 
 add_dependencies("${PROJECT_NAME}" CommonUtils)
 #Needed for quaified paths, for protejects which have external dependencies
-target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_SOURCE_DIR}")
 
 
