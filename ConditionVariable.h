@@ -5,7 +5,7 @@
 #include <CommonUtils/CommonDefs.h>
 class ConditionVariable
 {
-	stdConnditionVariable m_cond;
+	stdConditionVariable m_cond;
 	std::mutex m_mutex;
 	bool m_signalled;
 

@@ -10,6 +10,8 @@
 #include <CommonUtils/RingBuffer.h>
 #include "ConditionVariable.h"
 
+namespace utils = ULCommonUtils;
+
 template <class T>
 class IConsumerThread
 {
@@ -279,7 +281,6 @@ protected:
 	typedef std::vector<T> ConsumerQueue;
 	DEFINE_PTR(ConsumerQueue)
 
-
 private:
 	ConsumerQueue_SPtr m_queue;
 	stdMutex m_mutex;
@@ -290,7 +291,7 @@ private:
 	std::function<void(T)> m_predicate;
 	duration m_unitTime;
 	size_t m_numTransactions;
-	RingBuffer<time_point> m_transactionLog;
+	utils::RingBuffer<time_point> m_transactionLog;
 
 	virtual void run()
 	{
@@ -314,11 +315,11 @@ private:
 			for (auto const& currentItem : local)
 			{
 				if ((m_transactionLog.size() == m_numTransactions) &&
-					((now() - m_transactionLog.front()) < m_unitTime)
+					((utils::now() - m_transactionLog.front()) < m_unitTime)
 				   )
 					m_cond.wait_until(m_transactionLog.front() + m_unitTime);
 
-				m_transactionLog.push(now());
+				m_transactionLog.push(utils::now());
 				m_predicate(currentItem);
 			}
 		}
