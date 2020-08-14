@@ -15,29 +15,10 @@ namespace utils = ULCommonUtils;
 namespace ULMTTools
 {
 
-	template <class T>
-	class IConsumerThread
-	{
-	public:
-		virtual void kill() = 0;
-		virtual void push(T item) = 0;
-		virtual ~IConsumerThread() {}
-	};
-
-
-	template <class T>
-	class ISuspendableConsumerThread : public IConsumerThread<T>
-	{
-	public:
-		virtual void pause() = 0;
-		virtual void resume() = 0;
-		virtual ~ISuspendableConsumerThread() {}
-	};
-
 	class WorkerThread;
 	//Keep the template parameter as something assignable and copyable, otherwise results may be underministic
 	template <class T>
-	class FifoConsumerThread : public ISuspendableConsumerThread<T>
+	class FifoConsumerThread
 	{
 		friend class WorkerThread;
 	protected:
@@ -179,7 +160,7 @@ namespace ULMTTools
 	};
 
 	template <class T>
-	class TimedConsumerThread : public IConsumerThread<std::pair<std::chrono::system_clock::time_point, T>>
+	class TimedConsumerThread
 	{
 	protected:
 		typedef std::pair<std::chrono::system_clock::time_point, T> TimeItemPair;
@@ -213,11 +194,11 @@ namespace ULMTTools
 		{
 		}
 
-		virtual void push(TimeItemPair timeItemPair)
+		virtual void push(time_point t,  T item)
 		{
 			{
 				stdUniqueLock lock(*m_mutex);
-				m_itemQueue->push_back(timeItemPair);
+				m_itemQueue->push_back(TimeItemPair(t, item));
 			}
 
 			m_cond->notify_one();
@@ -278,7 +259,7 @@ namespace ULMTTools
 
 
 	template <class T>
-	class ThrottledConsumerThread : public IConsumerThread<T>
+	class ThrottledConsumerThread
 	{
 	protected:
 		typedef std::vector<T> ConsumerQueue;

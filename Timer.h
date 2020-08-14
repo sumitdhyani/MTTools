@@ -4,38 +4,17 @@
 
 namespace ULMTTools
 {
-	class ITimer
-	{
-	public:
-		virtual size_t install(Task task, duration interval) = 0;
-		virtual void unInstall(size_t timerId) = 0;
-
-		virtual ~ITimer() {}
-	};
-	DEFINE_PTR(ITimer)
-		DEFINE_UNIQUE_PTR(ITimer)
-
-
-		//Pass "default" to get the production implementation
-		class ITimerFactory
-	{
-	public:
-		virtual ITimer_UPtr create(std::string type) = 0;
-
-		virtual ~ITimerFactory() {}
-	};
-
-	class Timer : public ITimer
+	class Timer
 	{
 		typedef std::pair<Task, duration> TaskDurationPair;
 
-		TimedTaskWorkerThread_UPtr m_workerThread;
+		Scheduler_SPtr m_workerThread;
 		std::unordered_map<size_t, TaskDurationPair> m_taskListByTimerID;
 		stdMutex m_mutex;
 	public:
-		Timer(TimedTaskWorkerThread_UPtr workerThread)
+		Timer(Scheduler_SPtr workerThread):
+			m_workerThread(workerThread)
 		{
-			m_workerThread = std::move(workerThread);
 		}
 
 		size_t install(Task task, duration interval)
@@ -50,10 +29,7 @@ namespace ULMTTools
 				m_taskListByTimerID[timerId] = TaskDurationPair(task, interval);
 			}
 
-			m_workerThread->push(TimeTaskPair(std::chrono::system_clock::now(),
-				std::bind(&Timer::repeatTask, this, timerId)
-			)
-			);
+			m_workerThread->push(std::chrono::system_clock::now(), [this, timerId]() {repeatTask(timerId); });
 
 			return timerId;
 		}
@@ -83,20 +59,8 @@ namespace ULMTTools
 				//and this can make other timers miss their schedule
 				lock.unlock();
 				taskSchedulingInfo.first();
-				m_workerThread->push(TimeTaskPair(std::chrono::system_clock::now() + taskSchedulingInfo.second,
-					std::bind(&Timer::repeatTask, this, timerId)
-				)
-				);
+				m_workerThread->push(std::chrono::system_clock::now() + taskSchedulingInfo.second, [this, timerId]() {repeatTask(timerId); });
 			}
-		}
-	};
-
-	class TimerFactory : public ITimerFactory
-	{
-	public:
-		ITimer_UPtr create(std::string type)
-		{
-			return ITimer_UPtr(new Timer(std::make_unique<TimedTaskWorkerThread>(std::make_shared<std::vector<TimeTaskPair>>(), std::make_shared<stdMutex>(), std::make_shared<ConditionVariable>())));
 		}
 	};
 }

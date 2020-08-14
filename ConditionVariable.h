@@ -29,7 +29,7 @@ namespace ULMTTools
 		void wait()
 		{
 			stdUniqueLock lock(m_mutex);
-			m_cond.wait(lock, std::bind(&ConditionVariable::signalled, this));
+			m_cond.wait(lock, [this](){return m_signalled;});
 			m_signalled = false;
 		}
 
@@ -43,7 +43,7 @@ namespace ULMTTools
 		void wait_until(std::chrono::system_clock::time_point time)
 		{
 			stdUniqueLock lock(m_mutex);
-			m_cond.wait_until(lock, time, std::bind(&ConditionVariable::signalled, this));
+			m_cond.wait_until(lock, time, [this](){return m_signalled;});
 			m_signalled = false;
 		}
 
@@ -58,7 +58,7 @@ namespace ULMTTools
 		void wait_for(std::chrono::system_clock::duration duration)
 		{
 			stdUniqueLock lock(m_mutex);
-			m_cond.wait_for(lock, duration, std::bind(&ConditionVariable::signalled, this));
+			m_cond.wait_for(lock, duration, [this]() {return m_signalled;});
 			m_signalled = false;
 		}
 
@@ -85,11 +85,6 @@ namespace ULMTTools
 				m_signalled = true;
 			}
 			m_cond.notify_all();
-		}
-
-		bool signalled()
-		{
-			return m_signalled;
 		}
 	};
 	DEFINE_PTR(ConditionVariable)

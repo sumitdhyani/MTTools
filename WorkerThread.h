@@ -62,10 +62,10 @@ namespace ULMTTools
 	typedef std::pair<std::chrono::system_clock::time_point, Task> TimedTask;
 
 	typedef std::pair<std::chrono::system_clock::time_point, Task> TimeTaskPair;
-	class TimedTaskWorkerThread : public TimedConsumerThread<Task>
+	class Scheduler : public TimedConsumerThread<Task>
 	{
 	public:
-		TimedTaskWorkerThread(std::shared_ptr<std::vector<TimeTaskPair>> queue, stdMutex_SPtr mutex, ConditionVariable_SPtr cond) :
+		Scheduler(std::shared_ptr<std::vector<TimeTaskPair>> queue, stdMutex_SPtr mutex, ConditionVariable_SPtr cond) :
 			TimedConsumerThread<Task>(queue, mutex, [](Task task) {task(); }, cond)
 		{}
 	protected:
@@ -75,6 +75,5 @@ namespace ULMTTools
 			task();
 		}
 	};
-	DEFINE_PTR(TimedTaskWorkerThread)
-		DEFINE_UNIQUE_PTR(TimedTaskWorkerThread)
+	DEFINE_PTR(Scheduler)
 }
