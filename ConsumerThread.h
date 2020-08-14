@@ -11,14 +11,37 @@
 #include "ConditionVariable.h"
 
 namespace utils = ULCommonUtils;
+typedef std::function<void()> Task;
 
 namespace ULMTTools
 {
+	template<class T>
+	struct IConsumerThread
+	{
+		virtual void push(T item) = 0;
+		virtual void kill() = 0;
+	};
+
+	template<class T>
+	struct ISuspendableConsumerThread : IConsumerThread<T>
+	{
+		virtual void pause() = 0;
+		virtual void resume() = 0;
+	};
+
+	template<class T>
+	struct ISchedulerConsumerThread
+	{
+		virtual void push(time_point t, T item) = 0;
+		virtual void kill() = 0;
+	};
+
+
 
 	class WorkerThread;
 	//Keep the template parameter as something assignable and copyable, otherwise results may be underministic
 	template <class T>
-	class FifoConsumerThread
+	class FifoConsumerThread : public ISuspendableConsumerThread<T>
 	{
 		friend class WorkerThread;
 	protected:
@@ -160,7 +183,7 @@ namespace ULMTTools
 	};
 
 	template <class T>
-	class TimedConsumerThread
+	class TimedConsumerThread : public ISchedulerConsumerThread<T>
 	{
 	protected:
 		typedef std::pair<std::chrono::system_clock::time_point, T> TimeItemPair;
@@ -194,7 +217,7 @@ namespace ULMTTools
 		{
 		}
 
-		virtual void push(time_point t,  T item)
+		virtual void push(time_point t, T item)
 		{
 			{
 				stdUniqueLock lock(*m_mutex);
@@ -259,7 +282,7 @@ namespace ULMTTools
 
 
 	template <class T>
-	class ThrottledConsumerThread
+	class ThrottledConsumerThread : IConsumerThread<T>
 	{
 	protected:
 		typedef std::vector<T> ConsumerQueue;
@@ -353,6 +376,109 @@ namespace ULMTTools
 		~ThrottledConsumerThread()
 		{
 			kill();
+		}
+	};
+
+
+	template <class T>
+	class ReusableThrottler : IConsumerThread<T>
+	{
+	private:
+		std::shared_ptr<IConsumerThread<Task>> m_worker;
+		std::shared_ptr<ISchedulerConsumerThread<Task>> m_scheduler;
+		std::queue<T> m_pendingQueue;
+		bool m_bandwidthAvailable;
+
+		//Relevant only when m_bandwidthAvailable is true, to decide whether to scedule the
+		//invocation of onBandwidthAvailable event in case it's not already done
+		bool m_bandwidthAvailableEventScheduled;
+		std::function<void(T)> m_predicate;
+		duration m_unitTime;
+		size_t m_numTransactions;
+		utils::RingBuffer<time_point> m_transactionLog;
+
+		void processItemAndUpdateTransactionLog(T item)
+		{
+			m_predicate(item);
+			m_transactionLog.push(utils::now());
+			m_bandwidthAvailable = !((m_transactionLog.full()) &&
+									 ((utils::now() - m_transactionLog.front()) < m_unitTime)
+									);
+		}
+
+		void tryProcess(T item)
+		{
+			if (m_bandwidthAvailable)
+				processItemAndUpdateTransactionLog(item);
+			else
+			{
+				m_pendingQueue.push(item);
+				if (!m_bandwidthAvailableEventScheduled)
+				{
+					auto scheduleTime = m_transactionLog.front() + m_unitTime;
+					m_scheduler->push(scheduleTime, [this, scheduleTime]()
+					{
+						m_worker->push([this, scheduleTime]()
+						{
+							onBandwidthAvailable(scheduleTime);
+						});
+					});
+					m_bandwidthAvailableEventScheduled = true;
+				}
+			}
+		}
+
+			//allotedTime parameter will be useful for debugging purposes to see
+			//how much latency is there between alloted time and the actual invocation of the method
+		void onBandwidthAvailable(time_point allotedTime)
+		{
+			while (m_bandwidthAvailable && !m_pendingQueue.empty())
+			{
+				processItemAndUpdateTransactionLog(m_pendingQueue.front());
+				m_pendingQueue.pop();
+			}
+
+			if (!m_pendingQueue.empty())
+			{
+				auto scheduleTime = m_transactionLog.front() + m_unitTime;
+				m_scheduler->push(scheduleTime, [this, scheduleTime]()
+				{
+					m_worker->push([this, scheduleTime]()
+					{
+						onBandwidthAvailable(scheduleTime);
+					});
+				});
+			}
+			else
+				m_bandwidthAvailableEventScheduled = false;
+		}
+
+	public:
+
+		ReusableThrottler( std::shared_ptr<IConsumerThread<Task>> worker, 
+						   std::shared_ptr<ISchedulerConsumerThread<Task>> scheduler,
+						   std::function<void(T)> predicate, 
+						   duration unitTime, 
+						   size_t numTransactions
+						 )
+			:m_worker(worker),
+			m_scheduler(scheduler),
+			m_predicate(predicate),
+			m_unitTime(unitTime),
+			m_numTransactions(numTransactions),
+			m_transactionLog(numTransactions),
+			m_bandwidthAvailable(true),
+			m_bandwidthAvailableEventScheduled(false)
+		{
+		}
+
+		virtual void push(T item)
+		{
+			m_worker->push([this, item]() {tryProcess(item);});
+		}
+
+		virtual void kill()
+		{
 		}
 	};
 }

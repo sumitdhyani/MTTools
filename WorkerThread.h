@@ -1,10 +1,9 @@
 #pragma once
 #include "ConsumerThread.h"
 #include <CommonUtils/CommonDefs.h>
-typedef std::function<void()> Task;
 namespace ULMTTools
 {
-	class WorkerThread
+	class WorkerThread : public ISuspendableConsumerThread<Task>
 	{
 		friend class ThreadPool;
 		std::shared_ptr<FifoConsumerThread<Task>> m_consumer;
@@ -13,7 +12,7 @@ namespace ULMTTools
 
 		WorkerThread(std::shared_ptr<std::vector<Task>> queue, stdMutex_SPtr mutex, ConditionVariable_SPtr cond)
 		{
-			m_consumer = std::shared_ptr<FifoConsumerThread<Task>>(new FifoConsumerThread<Task>(queue, mutex, [](Task task) {task(); }, cond));
+			m_consumer = std::shared_ptr<FifoConsumerThread<Task>>(new FifoConsumerThread<Task>(queue, mutex, [](Task task) {task(); }));
 		}
 
 	public:
@@ -30,11 +29,22 @@ namespace ULMTTools
 		{
 			m_consumer->kill();
 		}
+
+		void pause()
+		{
+			m_consumer->pause();
+		}
+
+		void resume()
+		{
+			m_consumer->resume();
+		}
+
 	};
 	DEFINE_PTR(WorkerThread)
 
 
-		class ThrottledWorkerThread
+	class ThrottledWorkerThread
 	{
 		typedef ThrottledConsumerThread<Task> ThrottledConsumerThread;
 		DEFINE_PTR(ThrottledConsumerThread)
