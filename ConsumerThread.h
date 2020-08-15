@@ -387,11 +387,6 @@ namespace ULMTTools
 		std::shared_ptr<IConsumerThread<Task>> m_worker;
 		std::shared_ptr<ISchedulerConsumerThread<Task>> m_scheduler;
 		std::queue<T> m_pendingQueue;
-		bool m_bandwidthAvailable;
-
-		//Relevant only when m_bandwidthAvailable is true, to decide whether to scedule the
-		//invocation of onBandwidthAvailable event in case it's not already done
-		bool m_bandwidthAvailableEventScheduled;
 		std::function<void(T)> m_predicate;
 		duration m_unitTime;
 		size_t m_numTransactions;
@@ -401,56 +396,53 @@ namespace ULMTTools
 		{
 			m_predicate(item);
 			m_transactionLog.push(utils::now());
-			m_bandwidthAvailable = !((m_transactionLog.full()) &&
-									 ((utils::now() - m_transactionLog.front()) < m_unitTime)
-									);
+		}
+
+		bool bandWidthAvailable()
+		{
+			return	!((m_transactionLog.full()) &&
+					  ((utils::now() - m_transactionLog.front()) < m_unitTime)
+					 );
+		}
+
+		void scheduleBandwidthAvailableEvent(time_point scheduleTime)
+		{
+			m_scheduler->push(scheduleTime, [this, scheduleTime]()
+			{
+				m_worker->push([this, scheduleTime]()
+				{
+					onBandwidthAvailable(scheduleTime);
+				});
+			});
 		}
 
 		void tryProcess(T item)
 		{
-			if (m_bandwidthAvailable)
-				processItemAndUpdateTransactionLog(item);
-			else
+			if (!m_pendingQueue.empty())
+				m_pendingQueue.push(item);
+			else if (!bandWidthAvailable())
 			{
 				m_pendingQueue.push(item);
-				if (!m_bandwidthAvailableEventScheduled)
-				{
-					auto scheduleTime = m_transactionLog.front() + m_unitTime;
-					m_scheduler->push(scheduleTime, [this, scheduleTime]()
-					{
-						m_worker->push([this, scheduleTime]()
-						{
-							onBandwidthAvailable(scheduleTime);
-						});
-					});
-					m_bandwidthAvailableEventScheduled = true;
-				}
+				scheduleBandwidthAvailableEvent(m_transactionLog.front() + m_unitTime);
 			}
+			else
+				processItemAndUpdateTransactionLog(item);
 		}
 
-			//allotedTime parameter will be useful for debugging purposes to see
-			//how much latency is there between alloted time and the actual invocation of the method
+		//"allotedTime" parameter will be useful for debugging purposes to see
+		//how much delay is there between alloted time and the actual invocation of the method
 		void onBandwidthAvailable(time_point allotedTime)
 		{
-			while (m_bandwidthAvailable && !m_pendingQueue.empty())
+			while (bandWidthAvailable() && !m_pendingQueue.empty())
 			{
 				processItemAndUpdateTransactionLog(m_pendingQueue.front());
 				m_pendingQueue.pop();
 			}
 
+			//pending queue was not processed because of insufficient bandwidth,
+			//reschedule the bandwidth available event for the next slot fot bandwidth availability
 			if (!m_pendingQueue.empty())
-			{
-				auto scheduleTime = m_transactionLog.front() + m_unitTime;
-				m_scheduler->push(scheduleTime, [this, scheduleTime]()
-				{
-					m_worker->push([this, scheduleTime]()
-					{
-						onBandwidthAvailable(scheduleTime);
-					});
-				});
-			}
-			else
-				m_bandwidthAvailableEventScheduled = false;
+				scheduleBandwidthAvailableEvent(m_transactionLog.front() + m_unitTime);
 		}
 
 	public:
@@ -466,9 +458,7 @@ namespace ULMTTools
 			m_predicate(predicate),
 			m_unitTime(unitTime),
 			m_numTransactions(numTransactions),
-			m_transactionLog(numTransactions),
-			m_bandwidthAvailable(true),
-			m_bandwidthAvailableEventScheduled(false)
+			m_transactionLog(numTransactions)
 		{
 		}
 
