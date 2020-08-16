@@ -418,14 +418,16 @@ namespace ULMTTools
 
 		void tryProcess(T item)
 		{
+			//there are still some pending items so, queue it up behind them, even if the bandwidth is available
+			//so as not to spoil the fifo order
 			if (!m_pendingQueue.empty())
 				m_pendingQueue.push(item);
-			else if (!bandWidthAvailable())
+			else if (!bandWidthAvailable())//no pending items but bandwidth is unavailable, scehdule the processing event for next available timeslot
 			{
 				m_pendingQueue.push(item);
 				scheduleBandwidthAvailableEvent(m_transactionLog.front() + m_unitTime);
 			}
-			else
+			else//No pending items and bandwidth is available, so process it right away
 				processItemAndUpdateTransactionLog(item);
 		}
 
@@ -440,7 +442,7 @@ namespace ULMTTools
 			}
 
 			//pending queue was not processed because of insufficient bandwidth,
-			//reschedule the bandwidth available event for the next slot fot bandwidth availability
+			//reschedule the bandwidth available event for the next slot of bandwidth availability
 			if (!m_pendingQueue.empty())
 				scheduleBandwidthAvailableEvent(m_transactionLog.front() + m_unitTime);
 		}
