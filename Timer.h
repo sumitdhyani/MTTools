@@ -4,28 +4,31 @@
 
 namespace ULMTTools
 {
+	
 	class Timer
 	{
 		typedef std::pair<Task, duration> TaskDurationPair;
 
-		Scheduler_SPtr m_workerThread;
+		TaskScheduler_SPtr m_workerThread;
 		std::unordered_map<size_t, TaskDurationPair> m_taskListByTimerID;
 		stdMutex m_mutex;
+
+		//Incremented everytime a new timer is installed, a simple solution to generating new unique ids
+		size_t m_incrementalTimerId;
 	public:
-		Timer(Scheduler_SPtr workerThread):
-			m_workerThread(workerThread)
+		explicit Timer(TaskScheduler_SPtr workerThread):
+			m_workerThread(workerThread),
+			m_incrementalTimerId(0)
 		{
 		}
 
 		size_t install(Task task, duration interval)
 		{
-			auto timerId = std::hash<long long>()(std::chrono::system_clock::now().time_since_epoch().count() + rand());
+			size_t timerId = 0;
 
 			{
 				std::unique_lock<stdMutex> lock(m_mutex);
-				while (m_taskListByTimerID.find(timerId) != m_taskListByTimerID.end())
-					timerId = std::hash<long long>()(std::chrono::system_clock::now().time_since_epoch().count() + rand());
-
+				timerId = m_incrementalTimerId++;
 				m_taskListByTimerID[timerId] = TaskDurationPair(task, interval);
 			}
 
