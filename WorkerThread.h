@@ -1,6 +1,6 @@
 #pragma once
 #include "ConsumerThread.h"
-#include <CommonUtils/CommonDefs.h>
+#include <CommonUtils/CommonDefs.hpp>
 namespace ULMTTools
 {
 	typedef IConsumerThread<Task> IWorkerThread;

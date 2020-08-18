@@ -7,7 +7,7 @@
 #include <chrono>
 #include <thread>
 #include <memory>
-#include <CommonUtils/RingBuffer.h>
+#include <CommonUtils/RingBuffer.hpp>
 #include "ConditionVariable.h"
 
 namespace utils = ULCommonUtils;
