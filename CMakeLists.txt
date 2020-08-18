@@ -19,17 +19,17 @@ endif()
 if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
 	add_subdirectory(CommonUtils)	
 endif()
-
-project(MTTools)
-add_library("${PROJECT_NAME}" STATIC  WorkerThread.cpp
-Timer.cpp
-ThreadPool.cpp
-ConsumerThread.cpp
-ConditionVariable.cpp
+set(ALL_SOURCES Timer.hpp
+ThreadPool.hpp
+WorkerThread.hpp
+ConsumerThread.hpp
+ConditionVariable.hpp
 )
 
+project(MTTools)
+add_library("${PROJECT_NAME}" STATIC  "${ALL_SOURCES}")
 add_dependencies("${PROJECT_NAME}" CommonUtils)
 #Needed for quaified paths, for protejects which have external dependencies
 target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_SOURCE_DIR}")
-
+set_target_properties("${PROJECT_NAME}" PROPERTIES LINKER_LANGUAGE CXX)
 
