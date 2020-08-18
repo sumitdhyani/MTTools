@@ -1,5 +1,5 @@
 #pragma once
-#include "WorkerThread.h"
+#include "WorkerThread.hpp"
 #include <unordered_map>
 
 namespace ULMTTools

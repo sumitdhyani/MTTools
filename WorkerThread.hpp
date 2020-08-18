@@ -1,5 +1,5 @@
 #pragma once
-#include "ConsumerThread.h"
+#include "ConsumerThread.hpp"
 #include <CommonUtils/CommonDefs.hpp>
 namespace ULMTTools
 {
