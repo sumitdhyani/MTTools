@@ -25,7 +25,7 @@ namespace ULMTTools
 		{
 			for (uint i = 0; i < numThreads; i++)
 			{
-				m_workers.push_back(std::shared_ptr<WorkerThread>(new WorkerThread(queue, mutex, cond)));
+				m_workers.push_back(std::shared_ptr<WorkerThread>(new WorkerThread(m_queue, m_mutex, m_cond)));
 			}
 		}
 
@@ -34,6 +34,12 @@ namespace ULMTTools
 			ThreadPool(numThreads, queue, mutex, ConditionVariable_SPtr(new ConditionVariable))
 		{
 		}
+
+		ThreadPool(uint numThreads) :
+			ThreadPool(numThreads, std::make_shared<std::vector<Task>>(), std::make_shared<stdMutex>(), std::make_shared<ConditionVariable>())
+		{
+		}
+
 
 		virtual void push(Task task)
 		{
