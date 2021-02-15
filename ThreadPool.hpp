@@ -1,60 +1,93 @@
 #pragma once
 #include "WorkerThread.hpp"
-namespace ULMTTools
-{
-	class IThreadPool
-	{
-	public:
-		virtual void push(Task task) = 0;
-		virtual void kill() = 0;
-		virtual ~IThreadPool() {}
-	};
 
+namespace mtTools
+{
 	class ThreadPool
 	{
-		std::vector<std::shared_ptr<WorkerThread>> m_workers;
-		std::shared_ptr<std::vector<Task>> m_queue;
-		stdMutex_SPtr m_mutex;
-		ConditionVariable_SPtr m_cond;
+		typedef WorkerThread::TaskQueue TaskQueue;
+		DEFINE_PTR(TaskQueue)
+			TaskQueue m_queue;
+		stdMutex m_mutex;
+		mtInternalUtils::ConditionVariable m_cond;
+		std::atomic<bool> m_running;
+		bool m_consumerBusy;
+		stdThread m_thread;
 
-	protected:
-		ThreadPool(uint numThreads, std::shared_ptr<std::vector<Task>> queue, stdMutex_SPtr mutex, ConditionVariable_SPtr cond)
-			:m_queue(queue),
-			m_mutex(mutex),
-			m_cond(cond)
+		void run(size_t numWorkers)
 		{
-			for (uint i = 0; i < numThreads; i++)
+			std::vector<std::unique_ptr<WorkerThread>> workers;
+			for (size_t i = 0; i < numWorkers; i++)
+				workers.push_back(std::make_unique<WorkerThread>());
+
+			while (m_running)
 			{
-				m_workers.push_back(std::shared_ptr<WorkerThread>(new WorkerThread(m_queue, m_mutex, m_cond)));
+				TaskQueue local;
+
+				{
+					stdUniqueLock lock(m_mutex);
+
+					if (m_queue.empty())
+					{
+						m_consumerBusy = false;
+						m_cond.wait(lock);
+					}
+
+					m_queue.swap(local);
+					m_consumerBusy = true;
+				}
+
+				for (auto i = 0; i < local.size(); i++)
+					workers[i % workers.size()]->push(local[i]);
+			}
+
+			{
+				stdUniqueLock lock(m_mutex);
+				if (!m_queue.empty())
+				{
+					TaskQueue local;
+					m_queue.swap(local);
+					lock.unlock();
+					size_t index = 0;
+					for (auto it = local.begin(); it != local.end(); it++)
+						workers[index++ % numWorkers]->push(*it);
+				}
+			}
+		}
+
+		void kill()
+		{
+			stdUniqueLock lock(m_mutex);
+			if (m_running)
+			{
+				m_running = false;
+				lock.unlock();
+				m_cond.notify_one();
+				m_thread.join();
 			}
 		}
 
 	public:
-		ThreadPool(uint numThreads, std::shared_ptr<std::vector<Task>> queue, stdMutex_SPtr mutex) :
-			ThreadPool(numThreads, queue, mutex, ConditionVariable_SPtr(new ConditionVariable))
+		ThreadPool(uint numThreads)
 		{
+			numThreads = std::max<size_t>(2, numThreads);
+			m_thread = std::thread(std::bind(&ThreadPool::run, this, numThreads - 1));
+			m_running = true;
+			m_consumerBusy = false;
 		}
 
-		ThreadPool(uint numThreads) :
-			ThreadPool(numThreads, std::make_shared<std::vector<Task>>(), std::make_shared<stdMutex>(), std::make_shared<ConditionVariable>())
-		{
-		}
 
-
-		virtual void push(Task task)
+		void push(Task task)
 		{
 			{
-				stdUniqueLock lock(*m_mutex);
-				m_queue->push_back(task);
+				stdUniqueLock lock(m_mutex);
+				m_queue.push_back(task);
+				if (!m_consumerBusy)
+				{
+					lock.unlock();
+					m_cond.notify_one();
+				}
 			}
-
-			m_cond->notify_one();
-		}
-
-		virtual void kill()
-		{
-			for (auto& worker : m_workers)
-				worker->kill();
 		}
 
 		~ThreadPool()

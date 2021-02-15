@@ -2,9 +2,9 @@
 #include <mutex>
 #include <condition_variable>
 #include <functional>
-#include <CommonUtils/CommonDefs.hpp>
+#include "CommonUtils/CommonDefs.hpp"
 
-namespace ULMTTools
+namespace mtInternalUtils
 {
 	class ConditionVariable
 	{
@@ -29,7 +29,8 @@ namespace ULMTTools
 		void wait()
 		{
 			stdUniqueLock lock(m_mutex);
-			m_cond.wait(lock, [this](){return m_signalled;});
+			if (!m_signalled)
+				m_cond.wait(lock);
 			m_signalled = false;
 		}
 
@@ -40,14 +41,15 @@ namespace ULMTTools
 			applicationLock.lock();
 		}
 
-		void wait_until(std::chrono::system_clock::time_point time)
+		void wait_until(time_point time)
 		{
 			stdUniqueLock lock(m_mutex);
-			m_cond.wait_until(lock, time, [this](){return m_signalled;});
+			if (!m_signalled)
+				m_cond.wait_until(lock, time);
 			m_signalled = false;
 		}
 
-		void wait_until(std::chrono::system_clock::time_point time, stdUniqueLock& applicationLock)
+		void wait_until(time_point time, stdUniqueLock& applicationLock)
 		{
 			applicationLock.unlock();
 			wait_until(time);
@@ -55,14 +57,15 @@ namespace ULMTTools
 		}
 
 
-		void wait_for(std::chrono::system_clock::duration duration)
+		void wait_for(duration duration)
 		{
 			stdUniqueLock lock(m_mutex);
-			m_cond.wait_for(lock, duration, [this]() {return m_signalled;});
+			if (!m_signalled)
+				m_cond.wait_for(lock, duration);
 			m_signalled = false;
 		}
 
-		void wait_for(std::chrono::system_clock::duration duration, stdUniqueLock& applicationLock)
+		void wait_for(duration duration, stdUniqueLock& applicationLock)
 		{
 			applicationLock.unlock();
 			wait_for(duration);

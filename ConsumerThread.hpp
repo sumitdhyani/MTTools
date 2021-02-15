@@ -10,122 +10,121 @@
 #include <CommonUtils/RingBuffer.hpp>
 #include "ConditionVariable.hpp"
 
-namespace utils = ULCommonUtils;
 typedef std::function<void()> Task;
 
-namespace ULMTTools
+
+namespace mtTools {
+class WorkerThread;
+class TaskScheduler;
+}
+
+
+namespace mtInternalUtils
 {
-	template<class T>
-	struct IConsumerThread
-	{
-		virtual void push(T item) = 0;
-		virtual void kill() = 0;
-	};
-
-	template<class T>
-	struct ISuspendableConsumerThread : IConsumerThread<T>
-	{
-		virtual void pause() = 0;
-		virtual void resume() = 0;
-	};
-
-	template<class T>
-	struct ISchedulerConsumerThread
-	{
-		virtual void push(time_point t, T item) = 0;
-		virtual void kill() = 0;
-	};
-
-
-
-	class WorkerThread;
 	//Keep the template parameter as something assignable and copyable, otherwise results may be underministic
 	template <class T>
-	class FifoConsumerThread : public ISuspendableConsumerThread<T>
+	class FifoConsumerThread
 	{
-		friend class WorkerThread;
+		friend class mtTools::WorkerThread;
 	protected:
 		typedef std::vector<T> ConsumerQueue;
 		DEFINE_PTR(ConsumerQueue)
 
-			//Visible to only subclasses, as owning this condition variable by the client code can be dangerous
-			//in case the application programmer tries to do something fancy but is not aware of the dangerous edge cases
-			//The most likely side effects can then be an infinitely waiting thread or unexpected spurious wakeups
-			FifoConsumerThread(ConsumerQueue_SPtr queue, stdMutex_SPtr mutex, std::function<void(T)> predicate, ConditionVariable_SPtr cond)
-			:m_queue(queue),
-			m_mutex(mutex),
-			m_predicate(predicate),
-			m_cond(cond)
-		{
-			m_terminate = false;
-			m_consumerBusy = false;
-			m_paused = false;
-			m_thread = stdThread(&FifoConsumerThread::run, this);
-		}
+		
 	private:
-		ConsumerQueue_SPtr m_queue;
-		stdMutex_SPtr m_mutex;
-		ConditionVariable_SPtr m_cond;
+		ConsumerQueue m_queue;
+		stdMutex m_mutex;
+		ConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
 		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		bool m_paused;//signifies whether is the thread is paused
 		stdThread m_thread;
 		std::function<void(T)> m_predicate;
 
-		virtual void run()
+		void run()
 		{
 			while (!m_terminate)
 			{
 				ConsumerQueue local;
 
 				{
-					stdUniqueLock lock(*m_mutex);
+					stdUniqueLock lock(m_mutex);
 
 					if (m_paused)
-						m_cond->wait(lock);
+						m_cond.wait(lock);
 
-					if (m_queue->empty())
+					if (m_queue.empty())
 					{
 						m_consumerBusy = false;
-						m_cond->wait(lock);
+						m_cond.wait(lock);
 					}
 
-					m_queue->swap(local);
+					m_queue.swap(local);
 					m_consumerBusy = true;
 				}
 
-				for (auto const& currentItem : local)
-					m_predicate(currentItem);
+				for (auto it = local.begin(); it != local.end(); it++)
+					m_predicate(*it);
+			}
+
+			//If the consumer is killed or destroyed, it should exit only after completing the pending tasks
+			//so as not to leave the client code in a state of uncertainty regarding which tasks will be executed and which won't
+			//This leaves a clear cut behavior, i.e, all the items pushed before killing or destroying the consumer will be processed
+			{
+				stdUniqueLock lock(m_mutex);
+				if (!m_queue.empty())
+				{
+					ConsumerQueue local;
+					m_queue.swap(local);
+					lock.unlock();
+					for (auto it = local.begin(); it != local.end(); it++)
+						m_predicate(*it);
+				}
 			}
 		}
 
-
-	public:
-
-		FifoConsumerThread(ConsumerQueue_SPtr queue, stdMutex_SPtr mutex, std::function<void(T)> predicate)
-			:FifoConsumerThread(queue, mutex, predicate, ConditionVariable_SPtr(new ConditionVariable))
+		void kill()
 		{
+			stdUniqueLock lock(m_mutex);
+			if (!m_terminate)
+			{
+				m_terminate = true;
+				lock.unlock();
+				m_cond.notify_one();
+				m_thread.join();
+			}
 		}
 
+	public:
+		FifoConsumerThread(std::function<void(T)> predicate)
+			:m_predicate(predicate)
+		{
+			m_terminate = false;
+			m_consumerBusy = false;
+			m_paused = false;
+			m_thread = stdThread(&FifoConsumerThread::run, this);
+		}
 
-		virtual void push(T item)
+		void push(T item)
 		{
 			{
-				stdUniqueLock lock(*m_mutex);
-				m_queue->push_back(item);
+				stdUniqueLock lock(m_mutex);
+				if (m_terminate)
+					throw std::runtime_error("The consumer has been killed and is no longer in a state tot process new items");
+				m_queue.push_back(item);
 
 				if (!(m_paused || m_consumerBusy))
 				{
 					lock.unlock();
-					m_cond->notify_one();
+					m_cond.notify_one();
 				}
 			}
 
 		}
 
-		virtual void pause()
+		void pause()
 		{
-			stdUniqueLock lock(*m_mutex);
+			stdUniqueLock lock(m_mutex);
 
 			if (m_paused)
 			{
@@ -136,11 +135,16 @@ namespace ULMTTools
 				m_paused = true;
 		}
 
-
-
-		virtual void resume()
+		//returns number of pending items
+		size_t size()
 		{
-			stdUniqueLock lock(*m_mutex);
+			stdUniqueLock lock(m_mutex);
+			return m_queue.size();
+		}
+
+		void resume()
+		{
+			stdUniqueLock lock(m_mutex);
 
 			if (!m_paused)
 			{
@@ -151,30 +155,11 @@ namespace ULMTTools
 			{
 				m_paused = false;
 				lock.unlock();
-				m_cond->notify_one();
+				m_cond.notify_one();
 			}
 		}
 
-		virtual void kill()
-		{
-			stdUniqueLock lock(*m_mutex);
-			if (!m_terminate)
-			{
-				m_terminate = true;
-				lock.unlock();
-				//To avoid a spurious wakeup during kill process, to ensure we are able to wakeup the
-				//Thread owned by this object, we need to notify_all on this condition variable as this condition variable
-				//is shared by all the threads in case they belong to a threadpool
-				//Downside is that all threads will be woken up and contention
-				//is likely to happen between rest of the peer threads in the pool
-				//In case this is a standalone thread, i.e. a thread which is not a part of the threadpool, no performance
-				//impact will be there
-				//This will certainly involve spurious wakeups but the thing is we know when these spuirious wakeups will occur and the 
-				//impact and are ok with it
-				m_cond->notify_all();
-				m_thread.join();
-			}
-		}
+		
 
 		~FifoConsumerThread()
 		{
@@ -183,51 +168,54 @@ namespace ULMTTools
 	};
 
 	template <class T>
-	class TimedConsumerThread : public ISchedulerConsumerThread<T>
+	class Scheduler
 	{
 	protected:
-		typedef std::pair<std::chrono::system_clock::time_point, T> TimeItemPair;
+		typedef std::pair<time_point, T> TimeItemPair;
 		typedef std::vector<TimeItemPair> ConsumerQueue;
 		DEFINE_PTR(ConsumerQueue)
 
 	private:
-		ConsumerQueue_SPtr m_itemQueue;
-		stdMutex_SPtr m_mutex;
-		ConditionVariable_SPtr m_cond;
-		std::map<std::chrono::system_clock::time_point, std::vector<T>> m_processingQueue;
+		ConsumerQueue m_itemQueue;
+		stdMutex m_mutex;
+		ConditionVariable m_cond;
+		std::map<time_point, std::vector<T>> m_processingQueue;
 		std::atomic<bool> m_terminate;
 		stdThread m_thread;
 		std::function<void(T)> m_predicate;
 
+		void kill()
+		{
+			stdUniqueLock lock(m_mutex);
+			if (!m_terminate)
+			{
+				m_terminate = true;
+				lock.unlock();//Ugly but necessary
+				m_cond.notify_all();
+				m_thread.join();
+			}
+		}
+
 	public:
 
-		TimedConsumerThread(ConsumerQueue_SPtr queue, stdMutex_SPtr mutex, std::function<void(T)> predicate, ConditionVariable_SPtr cond)
-			:m_itemQueue(queue),
-			m_mutex(mutex),
-			m_predicate(predicate),
-			m_cond(cond)
+		Scheduler(std::function<void(T)> predicate)
+			:m_predicate(predicate)
 		{
 			m_terminate = false;
-			m_thread = stdThread(&TimedConsumerThread::run, this);
+			m_thread = stdThread(&Scheduler::run, this);
 		}
 
-
-		TimedConsumerThread(ConsumerQueue_SPtr queue, stdMutex_SPtr mutex, std::function<void(T)> predicate)
-			:TimedConsumerThread(queue, mutex, predicate, ConditionVariable_SPtr(new ConditionVariable))
-		{
-		}
-
-		virtual void push(time_point t, T item)
+		void push(time_point t, T item)
 		{
 			{
-				stdUniqueLock lock(*m_mutex);
-				m_itemQueue->push_back(TimeItemPair(t, item));
+				stdUniqueLock lock(m_mutex);
+				m_itemQueue.push_back(TimeItemPair(t, item));
 			}
 
-			m_cond->notify_one();
+			m_cond.notify_one();
 		}
 
-		virtual void run()
+		void run()
 		{
 			while (!m_terminate)
 			{
@@ -235,8 +223,8 @@ namespace ULMTTools
 					ConsumerQueue local;
 
 					{
-						stdUniqueLock lock(*m_mutex);
-						m_itemQueue->swap(local);
+						stdUniqueLock lock(m_mutex);
+						m_itemQueue.swap(local);
 					}
 
 					for (auto currentItem : local)
@@ -246,7 +234,7 @@ namespace ULMTTools
 				auto it = m_processingQueue.begin();
 				if (!m_processingQueue.empty())
 				{
-					if (it->first <= std::chrono::system_clock::now())
+					if (it->first <= ULCommonUtils::now())
 					{
 						auto& processingQueue = it->second;
 						for (auto& item : processingQueue)
@@ -255,26 +243,14 @@ namespace ULMTTools
 						m_processingQueue.erase(it);
 					}
 					else
-						m_cond->wait_until(it->first);
+						m_cond.wait_until(it->first);
 				}
 				else
-					m_cond->wait();
+					m_cond.wait();
 			}
 		}
 
-		virtual void kill()
-		{
-			stdUniqueLock lock(*m_mutex);
-			if (!m_terminate)
-			{
-				m_terminate = true;
-				lock.unlock();//Ugly but necessary
-				m_cond->notify_all();
-				m_thread.join();
-			}
-		}
-
-		~TimedConsumerThread()
+		~Scheduler()
 		{
 			kill();
 		}
@@ -282,7 +258,7 @@ namespace ULMTTools
 
 
 	template <class T>
-	class ThrottledConsumerThread : IConsumerThread<T>
+	class ThrottledConsumerThread
 	{
 	protected:
 		typedef std::vector<T> ConsumerQueue;
@@ -297,10 +273,9 @@ namespace ULMTTools
 		stdThread m_thread;
 		std::function<void(T)> m_predicate;
 		duration m_unitTime;
-		size_t m_numTransactions;
-		utils::RingBuffer<time_point> m_transactionLog;
+		ULCommonUtils::RingBuffer<time_point> m_transactionLog;
 
-		virtual void run()
+		void run()
 		{
 			while (!m_terminate)
 			{
@@ -321,12 +296,12 @@ namespace ULMTTools
 
 				for (auto const& currentItem : local)
 				{
-					if ((m_transactionLog.size() == m_numTransactions) &&
-						((utils::now() - m_transactionLog.front()) < m_unitTime)
+					if (m_transactionLog.full() &&
+						((ULCommonUtils::now() - m_transactionLog.front()) <= m_unitTime)
 						)
-						m_cond.wait_until(m_transactionLog.front() + m_unitTime);
+						std::this_thread::sleep_until(m_transactionLog.front() + m_unitTime);
 
-					m_transactionLog.push(utils::now());
+					m_transactionLog.push(ULCommonUtils::now());
 					m_predicate(currentItem);
 				}
 			}
@@ -339,7 +314,6 @@ namespace ULMTTools
 			:m_queue(queue),
 			m_predicate(predicate),
 			m_unitTime(unitTime),
-			m_numTransactions(numTransactions),
 			m_transactionLog(numTransactions)
 		{
 			m_terminate = false;
@@ -347,7 +321,7 @@ namespace ULMTTools
 			m_thread = stdThread(&ThrottledConsumerThread::run, this);
 		}
 
-		virtual void push(T item)
+		void push(T item)
 		{
 			{
 				stdUniqueLock lock(m_mutex);
@@ -361,7 +335,7 @@ namespace ULMTTools
 			}
 		}
 
-		virtual void kill()
+		void kill()
 		{
 			stdUniqueLock lock(m_mutex);
 			if (!m_terminate)
@@ -381,27 +355,27 @@ namespace ULMTTools
 
 
 	template <class T>
-	class ReusableThrottler : IConsumerThread<T>
+	class ReusableThrottler
 	{
 	private:
-		std::shared_ptr<IConsumerThread<Task>> m_worker;
-		std::shared_ptr<ISchedulerConsumerThread<Task>> m_scheduler;
+		std::shared_ptr<mtTools::WorkerThread> m_worker;
+		std::shared_ptr<mtTools::TaskScheduler> m_scheduler;
 		std::queue<T> m_pendingQueue;
 		std::function<void(T)> m_predicate;
 		duration m_unitTime;
 		size_t m_numTransactions;
-		utils::RingBuffer<time_point> m_transactionLog;
+		ULCommonUtils::RingBuffer<time_point> m_transactionLog;
 
 		void processItemAndUpdateTransactionLog(T item)
 		{
 			m_predicate(item);
-			m_transactionLog.push(utils::now());
+			m_transactionLog.push(ULCommonUtils::now());
 		}
 
 		bool bandWidthAvailable()
 		{
 			return	!((m_transactionLog.full()) &&
-					  ((utils::now() - m_transactionLog.front()) < m_unitTime)
+					  ((ULCommonUtils::now() - m_transactionLog.front()) < m_unitTime)
 					 );
 		}
 
@@ -449,12 +423,12 @@ namespace ULMTTools
 
 	public:
 
-		ReusableThrottler( std::shared_ptr<IConsumerThread<Task>> worker, 
-						   std::shared_ptr<ISchedulerConsumerThread<Task>> scheduler,
-						   std::function<void(T)> predicate, 
-						   duration unitTime, 
-						   size_t numTransactions
-						 )
+		ReusableThrottler(std::shared_ptr<mtTools::WorkerThread> worker,
+			std::shared_ptr<mtTools::TaskScheduler> scheduler,
+			std::function<void(T)> predicate,
+			duration unitTime,
+			size_t numTransactions
+		)
 			:m_worker(worker),
 			m_scheduler(scheduler),
 			m_predicate(predicate),
@@ -464,12 +438,12 @@ namespace ULMTTools
 		{
 		}
 
-		virtual void push(T item)
+		void push(T item)
 		{
-			m_worker->push([this, item]() {tryProcess(item);});
+			m_worker->push([this, item]() {tryProcess(item); });
 		}
 
-		virtual void kill()
+		void kill()
 		{
 		}
 	};

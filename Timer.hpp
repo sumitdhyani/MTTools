@@ -1,10 +1,10 @@
 #pragma once
-#include "WorkerThread.hpp"
+#include "TaskScheduler.hpp"
 #include <unordered_map>
 
-namespace ULMTTools
+
+namespace mtTools
 {
-	
 	class Timer
 	{
 		typedef std::pair<Task, duration> TaskDurationPair;
@@ -16,7 +16,7 @@ namespace ULMTTools
 		//Incremented everytime a new timer is installed, a simple solution to generating new unique ids
 		size_t m_incrementalTimerId;
 	public:
-		explicit Timer(TaskScheduler_SPtr workerThread):
+		explicit Timer(TaskScheduler_SPtr workerThread) :
 			m_workerThread(workerThread),
 			m_incrementalTimerId(0)
 		{
@@ -32,7 +32,7 @@ namespace ULMTTools
 				m_taskListByTimerID[timerId] = TaskDurationPair(task, interval);
 			}
 
-			m_workerThread->push(std::chrono::system_clock::now(), [this, timerId]() {repeatTask(timerId); });
+			m_workerThread->push(ULCommonUtils::now(), [this, timerId]() {repeatTask(timerId); });
 
 			return timerId;
 		}
@@ -62,7 +62,7 @@ namespace ULMTTools
 				//and this can make other timers miss their schedule
 				lock.unlock();
 				taskSchedulingInfo.first();
-				m_workerThread->push(std::chrono::system_clock::now() + taskSchedulingInfo.second, [this, timerId]() {repeatTask(timerId); });
+				m_workerThread->push(ULCommonUtils::now() + taskSchedulingInfo.second, [this, timerId]() {repeatTask(timerId); });
 			}
 		}
 	};
