@@ -13,7 +13,7 @@
 typedef std::function<void()> Task;
 
 
-namespace mtTools {
+namespace ULMTTools {
 class WorkerThread;
 class TaskScheduler;
 }
@@ -25,7 +25,7 @@ namespace mtInternalUtils
 	template <class T>
 	class FifoConsumerThread
 	{
-		friend class mtTools::WorkerThread;
+		friend class ULMTTools::WorkerThread;
 	protected:
 		typedef std::vector<T> ConsumerQueue;
 		DEFINE_PTR(ConsumerQueue)
@@ -358,8 +358,8 @@ namespace mtInternalUtils
 	class ReusableThrottler
 	{
 	private:
-		std::shared_ptr<mtTools::WorkerThread> m_worker;
-		std::shared_ptr<mtTools::TaskScheduler> m_scheduler;
+		std::shared_ptr<ULMTTools::WorkerThread> m_worker;
+		std::shared_ptr<ULMTTools::TaskScheduler> m_scheduler;
 		std::queue<T> m_pendingQueue;
 		std::function<void(T)> m_predicate;
 		duration m_unitTime;
@@ -423,8 +423,8 @@ namespace mtInternalUtils
 
 	public:
 
-		ReusableThrottler(std::shared_ptr<mtTools::WorkerThread> worker,
-			std::shared_ptr<mtTools::TaskScheduler> scheduler,
+		ReusableThrottler(std::shared_ptr<ULMTTools::WorkerThread> worker,
+			std::shared_ptr<ULMTTools::TaskScheduler> scheduler,
 			std::function<void(T)> predicate,
 			duration unitTime,
 			size_t numTransactions

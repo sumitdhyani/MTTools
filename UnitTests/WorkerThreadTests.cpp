@@ -3,7 +3,7 @@
 #include <CPPUtilities/Timer.hpp>
 #include <CPPUtilities/ThreadPool.hpp>
 
-namespace mt = patsUtils::mtTools;
+namespace mt = patsUtils::ULMTTools;
 namespace mtInternal = mtInternalUtils;
 
 struct WorkerThreadTests : ::testing::Test 

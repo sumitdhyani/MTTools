@@ -4,7 +4,7 @@
 #include <CommonUtils/CommonDefs.hpp>
 #include <gtest/gtest.h>
 
-namespace mt = mtTools;
+namespace mt = ULMTTools;
 namespace mtInternal = mtInternalUtils;
 
 #define BILLION 1000000000

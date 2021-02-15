@@ -4,7 +4,7 @@
 #include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
 
-namespace mt = mtTools;
+namespace mt = ULMTTools;
 namespace mtInternal = mtInternalUtils;
 
 struct ThreadPoolTests : ::testing::Test 

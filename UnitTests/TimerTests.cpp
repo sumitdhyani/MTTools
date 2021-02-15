@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <CommonUtils/CommonDefs.hpp>
 #include <Timer.hpp>
-namespace mt = mtTools;
+namespace mt = ULMTTools;
 namespace utils = ULCommonUtils;
 
 struct BasicTimerTests : ::testing::Test

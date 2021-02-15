@@ -1,7 +1,7 @@
 #pragma once
 #include "WorkerThread.hpp"
 
-namespace mtTools
+namespace ULMTTools
 {
 	class TaskScheduler
 	{

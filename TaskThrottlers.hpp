@@ -2,7 +2,7 @@
 #include "WorkerThread.hpp"
 #include "TaskScheduler.hpp"
 
-namespace mtTools
+namespace ULMTTools
 {
 	class ThrottledWorkerThread
 	{

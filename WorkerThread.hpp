@@ -2,7 +2,7 @@
 #include "ConsumerThread.hpp"
 #include "CommonUtils/CommonDefs.hpp"
 
-namespace mtTools
+namespace ULMTTools
 {
 	class WorkerThread
 	{

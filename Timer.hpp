@@ -3,7 +3,7 @@
 #include <unordered_map>
 
 
-namespace mtTools
+namespace ULMTTools
 {
 	class Timer
 	{
