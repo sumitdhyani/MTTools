@@ -32,7 +32,8 @@ namespace ULMTTools
 				m_taskListByTimerID[timerId] = TaskDurationPair(task, interval);
 			}
 
-			m_workerThread->push(ULCommonUtils::now(), [this, timerId]() {repeatTask(timerId); });
+			auto now = ULCommonUtils::now();
+			m_workerThread->push(now, [this, timerId, now]() {repeatTask(timerId, now); });
 
 			return timerId;
 		}
@@ -45,7 +46,7 @@ namespace ULMTTools
 		}
 
 	private:
-		void repeatTask(size_t timerId)
+		void repeatTask(size_t timerId, time_point scheduledTime)
 		{
 			std::unique_lock<stdMutex> lock(m_mutex);
 			auto it = m_taskListByTimerID.find(timerId);
@@ -62,7 +63,8 @@ namespace ULMTTools
 				//and this can make other timers miss their schedule
 				lock.unlock();
 				taskSchedulingInfo.first();
-				m_workerThread->push(ULCommonUtils::now() + taskSchedulingInfo.second, [this, timerId]() {repeatTask(timerId); });
+				auto newScheduledTime = scheduledTime + taskSchedulingInfo.second;
+				m_workerThread->push(newScheduledTime, [this, timerId, newScheduledTime]() {repeatTask(timerId, newScheduledTime); });
 			}
 		}
 	};
