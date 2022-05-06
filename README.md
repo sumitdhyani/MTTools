@@ -3,7 +3,7 @@ The applictions should imclude header WorkerThread.hpp.
 Following are the classes which may be used by the client applications:
 
 1. WorkerThread: An interface to execute tasks in a separate thread, all tasks executed using this interface are guarenteed to execute in the same thread.
-See unitTests/WorkerThreads.cpp for examples.
+See unitTests/WorkerThreadTests.cpp for examples.
 
 2. TaskScheduler: Used for timed execution of tasks, executes tasks in its own thread
 
