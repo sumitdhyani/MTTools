@@ -41,9 +41,6 @@ if(NOT TARGET CommonUtils)
 	execute_process(COMMAND git clone https://github.com/sumitdhyani/CommonUtils.git "${CMAKE_SOURCE_DIR}/CommonUtils")
 endif()
 
-if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
-	add_subdirectory(CommonUtils)	
-endif()
 set(ALL_SOURCES ConditionVariable.hpp
 TaskScheduler.hpp
 TaskThrottlers.hpp
@@ -60,4 +57,4 @@ add_dependencies("${PROJECT_NAME}" CommonUtils)
 target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_SOURCE_DIR}")
 set_target_properties("${PROJECT_NAME}" PROPERTIES LINKER_LANGUAGE CXX)
 
-add_subdirectory("UnitTests")	
+add_subdirectory("UnitTests")
