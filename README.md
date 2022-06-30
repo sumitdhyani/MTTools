@@ -1,4 +1,10 @@
-Provides object oriented interface for multithreading applications. The applications should include header WorkerThread.hpp. Following are the classes which may be used by the client applications:
+Provides object oriented interface for multithreading applications. The library is header only. However it needs to download some header-only dependencies of its own.
+For that, go to the root directory and run the setup.sh/setup.bat for linux/windowsa dn you are ready to go.
+
+For examples, one can look into the unitTests directory.
+To run unitTests, you need to have boost and gtest libraries on your system and environment variables BOOST_ROOT and GTEST_ROOT defined as the root directories for these 2 libs. 
+
+Following are the classes which may be used by the client applications:
 1.	WorkerThread: An interface to execute tasks in a separate thread, all tasks executed using this interface are guaranteed to execute in the same thread. See unitTests/WorkerThreadTests.cpp for examples.
 2.	TaskScheduler: Used for timed execution of tasks, executes tasks in its own thread
 3.	Timer: Used to repeatedly execute a task/function, for example client sending heartbeat messages to server. See unitTests/TimerTests for examples.

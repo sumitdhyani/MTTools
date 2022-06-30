@@ -2,7 +2,7 @@ if(NOT CMAKE_BUILD_TYPE )
         set(CMAKE_BUILD_TYPE Release)
 endif()
 
-if(NOT CMAKE_GENERATOR_PLATFORM)
+if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
         set(CMAKE_GENERATOR_PLATFORM x64)
 endif()
 
@@ -53,7 +53,7 @@ WorkerThread.hpp)
 project(MTTools)
 add_library("${PROJECT_NAME}" STATIC  "${ALL_SOURCES}")
 add_dependencies("${PROJECT_NAME}" CommonUtils)
-#Needed for quaified paths, for protejects which have external dependencies
+#Needed for quaified paths, for projects which have external dependencies
 target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_SOURCE_DIR}")
 set_target_properties("${PROJECT_NAME}" PROPERTIES LINKER_LANGUAGE CXX)
 
