@@ -20,12 +20,12 @@ namespace ULMTTools
 		}
 #endif //ENABLE_MTTOOLS_TESTSING
 
-		ThrottledWorkerThread(duration unitTime, size_t numTransactions)
+		ThrottledWorkerThread(const duration& unitTime, const size_t& numTransactions)
 			:m_consumer(std::make_unique<ThrottledConsumerThread>(std::make_shared<std::vector<Task>>(), [](Task task) {task(); }, unitTime, numTransactions))
 		{
 		}
 
-		void push(Task task)
+		void push(const Task& task)
 		{
 			m_consumer->push(task);
 		}
@@ -43,12 +43,15 @@ namespace ULMTTools
 
 			ReusableThrottler_UPtr m_consumer;
 	public:
-		ReusableThrottledWorkerThread(std::shared_ptr<WorkerThread> worker, std::shared_ptr<TaskScheduler> taskScheduler, duration unitTime, size_t numTransactions)
+		ReusableThrottledWorkerThread(const std::shared_ptr<WorkerThread>& worker,
+																	const std::shared_ptr<TaskScheduler> taskScheduler,
+																	const duration& unitTime,
+																	const size_t& numTransactions)
 			:m_consumer(std::make_unique<ReusableThrottler>(worker, taskScheduler, [](Task task) {task(); }, unitTime, numTransactions))
 		{
 		}
 
-		void push(Task task)
+		void push(const Task& task)
 		{
 			m_consumer->push(task);
 		}

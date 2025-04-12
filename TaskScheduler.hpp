@@ -15,7 +15,7 @@ namespace ULMTTools
 		TaskScheduler() : m_timedConsumer([](Task task) {task(); })
 		{}
 
-		virtual void push(time_point t, Task task)
+		virtual void push(const time_point& t, const Task& task)
 		{
 			m_timedConsumer.push(t, task);
 		}

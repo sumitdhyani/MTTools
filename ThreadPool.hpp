@@ -14,7 +14,7 @@ namespace ULMTTools
 		bool m_consumerBusy;
 		stdThread m_thread;
 
-		void run(size_t numWorkers)
+		void run(const size_t& numWorkers)
 		{
 			std::vector<std::unique_ptr<WorkerThread>> workers;
 			for (size_t i = 0; i < numWorkers; i++)
@@ -68,16 +68,15 @@ namespace ULMTTools
 		}
 
 	public:
-		ThreadPool(uint numThreads)
+		ThreadPool(const uint& numThreads)
 		{
-			numThreads = std::max<size_t>(2, numThreads);
-			m_thread = std::thread(std::bind(&ThreadPool::run, this, numThreads - 1));
+			m_thread = std::thread(std::bind(&ThreadPool::run, this, std::max<size_t>(2, numThreads) - 1));
 			m_running = true;
 			m_consumerBusy = false;
 		}
 
 
-		void push(Task task)
+		void push(const Task& task)
 		{
 			{
 				stdUniqueLock lock(m_mutex);

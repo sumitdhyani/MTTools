@@ -16,13 +16,13 @@ namespace ULMTTools
 		//Incremented everytime a new timer is installed, a simple solution to generating new unique ids
 		size_t m_incrementalTimerId;
 	public:
-		explicit Timer(TaskScheduler_SPtr workerThread) :
+		explicit Timer(const TaskScheduler_SPtr& workerThread) :
 			m_workerThread(workerThread),
 			m_incrementalTimerId(0)
 		{
 		}
 
-		size_t install(Task task, duration interval)
+		size_t install(const Task& task, const duration& interval)
 		{
 			size_t timerId = 0;
 
@@ -39,14 +39,14 @@ namespace ULMTTools
 		}
 
 
-		void unInstall(size_t timerId)
+		void unInstall(const size_t& timerId)
 		{
 			std::unique_lock<stdMutex> lock(m_mutex);
 			m_taskListByTimerID.erase(timerId);
 		}
 
 	private:
-		void repeatTask(size_t timerId, time_point scheduledTime)
+		void repeatTask(const size_t& timerId, const time_point& scheduledTime)
 		{
 			std::unique_lock<stdMutex> lock(m_mutex);
 			auto it = m_taskListByTimerID.find(timerId);

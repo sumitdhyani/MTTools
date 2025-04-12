@@ -19,7 +19,7 @@ namespace ULMTTools
 		{
 		}
 
-		void push(Task task)
+		void push(const Task& task)
 		{
 			m_consumer.push(task);
 		}

@@ -41,7 +41,7 @@ namespace mtInternalUtils
 			applicationLock.lock();
 		}
 
-		void wait_until(time_point time)
+		void wait_until(const time_point& time)
 		{
 			stdUniqueLock lock(m_mutex);
 			if (!m_signalled)
@@ -49,7 +49,7 @@ namespace mtInternalUtils
 			m_signalled = false;
 		}
 
-		void wait_until(time_point time, stdUniqueLock& applicationLock)
+		void wait_until(const time_point& time, stdUniqueLock& applicationLock)
 		{
 			applicationLock.unlock();
 			wait_until(time);
@@ -57,7 +57,7 @@ namespace mtInternalUtils
 		}
 
 
-		void wait_for(duration duration)
+		void wait_for(const duration& duration)
 		{
 			stdUniqueLock lock(m_mutex);
 			if (!m_signalled)
@@ -65,7 +65,7 @@ namespace mtInternalUtils
 			m_signalled = false;
 		}
 
-		void wait_for(duration duration, stdUniqueLock& applicationLock)
+		void wait_for(const duration& duration, stdUniqueLock& applicationLock)
 		{
 			applicationLock.unlock();
 			wait_for(duration);

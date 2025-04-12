@@ -105,7 +105,7 @@ namespace mtInternalUtils
 			m_thread = stdThread(&FifoConsumerThread::run, this);
 		}
 
-		void push(T item)
+		void push(const T& item)
 		{
 			{
 				stdUniqueLock lock(m_mutex);
@@ -205,7 +205,7 @@ namespace mtInternalUtils
 			m_thread = stdThread(&Scheduler::run, this);
 		}
 
-		void push(time_point t, T item)
+		void push(const time_point& t, const T& item)
 		{
 			{
 				stdUniqueLock lock(m_mutex);
@@ -321,7 +321,7 @@ namespace mtInternalUtils
 			m_thread = stdThread(&ThrottledConsumerThread::run, this);
 		}
 
-		void push(T item)
+		void push(const T& item)
 		{
 			{
 				stdUniqueLock lock(m_mutex);
@@ -438,7 +438,7 @@ namespace mtInternalUtils
 		{
 		}
 
-		void push(T item)
+		void push(const T& item)
 		{
 			m_worker->push([this, item]() {tryProcess(item); });
 		}
