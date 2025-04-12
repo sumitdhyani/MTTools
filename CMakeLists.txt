@@ -14,7 +14,7 @@ endif()
 
 if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
 	set(CMAKE_CXX_STANDARD 17)
-	cmake_minimum_required(VERSION 2.8.9)
+	cmake_minimum_required(VERSION 3.5.0)
 	if(WIN32)
 		set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 		set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
@@ -40,6 +40,8 @@ endif()
 if(NOT TARGET CommonUtils)
 	execute_process(COMMAND git clone https://github.com/sumitdhyani/CommonUtils.git "${CMAKE_SOURCE_DIR}/CommonUtils")
 endif()
+
+add_subdirectory(CommonUtils)
 
 set(ALL_SOURCES ConditionVariable.hpp
 TaskScheduler.hpp

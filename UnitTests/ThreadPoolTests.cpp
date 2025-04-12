@@ -1,5 +1,6 @@
 #include <ThreadPool.hpp>
-#include <boost/asio/io_service.hpp>
+#include <boost/asio.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/bind.hpp>
 #include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
@@ -117,12 +118,14 @@ TEST_F(ThreadPoolTests, PerformanceVsBoost)
 		return (double)t_threadPool.count() / (double)t_singleThread.count();
 	};
 
-	boost::asio::io_service ioService;
+	boost::asio::io_context ioService;
 	boost::thread_group threadpool;
-	boost::asio::io_service::work work(ioService);
+	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work =
+			boost::asio::make_work_guard(ioService);
+
 	for(size_t i = 0; i < numCores; i++)
 		threadpool.create_thread(
-			boost::bind(&boost::asio::io_service::run, &ioService)
+			boost::bind(&boost::asio::io_context::run, &ioService)
 		);
 
 	auto performanceRatioBoost = [&ioService, &func, &cond, &numTasksExecutedTillNow](size_t totalTasks, size_t numRepetetionsPerTask)
@@ -131,7 +134,7 @@ TEST_F(ThreadPoolTests, PerformanceVsBoost)
 		auto now = std::chrono::high_resolution_clock::now;
 		auto start = now();
 		for (size_t i = 1; i <= totalTasks; i++)
-			ioService.post(std::bind(func, totalTasks, numRepetetionsPerTask, true));
+			boost::asio::post(ioService, std::bind(func, totalTasks, numRepetetionsPerTask, true));
 		cond.wait();
 		auto t_threadPool = now() - start;
 
