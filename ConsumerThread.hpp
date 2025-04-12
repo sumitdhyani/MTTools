@@ -39,7 +39,7 @@ namespace mtInternalUtils
 		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		bool m_paused;//signifies whether is the thread is paused
 		stdThread m_thread;
-		std::function<void(T)> m_predicate;
+		std::function<void(T)> m_processor;
 
 		void run()
 		{
@@ -64,7 +64,7 @@ namespace mtInternalUtils
 				}
 
 				for (auto it = local.begin(); it != local.end(); it++)
-					m_predicate(*it);
+					m_processor(*it);
 			}
 
 			//If the consumer is killed or destroyed, it should exit only after completing the pending tasks
@@ -78,7 +78,7 @@ namespace mtInternalUtils
 					m_queue.swap(local);
 					lock.unlock();
 					for (auto it = local.begin(); it != local.end(); it++)
-						m_predicate(*it);
+						m_processor(*it);
 				}
 			}
 		}
@@ -97,7 +97,7 @@ namespace mtInternalUtils
 
 	public:
 		FifoConsumerThread(std::function<void(T)> predicate)
-			:m_predicate(predicate)
+			:m_processor(predicate)
 		{
 			m_terminate = false;
 			m_consumerBusy = false;
@@ -182,7 +182,7 @@ namespace mtInternalUtils
 		std::map<time_point, std::vector<T>> m_processingQueue;
 		std::atomic<bool> m_terminate;
 		stdThread m_thread;
-		std::function<void(T)> m_predicate;
+		std::function<void(T)> m_processor;
 
 		void kill()
 		{
@@ -199,7 +199,7 @@ namespace mtInternalUtils
 	public:
 
 		Scheduler(std::function<void(T)> predicate)
-			:m_predicate(predicate)
+			:m_processor(predicate)
 		{
 			m_terminate = false;
 			m_thread = stdThread(&Scheduler::run, this);
@@ -238,7 +238,7 @@ namespace mtInternalUtils
 					{
 						auto& processingQueue = it->second;
 						for (auto& item : processingQueue)
-							m_predicate(item);
+							m_processor(item);
 
 						m_processingQueue.erase(it);
 					}
@@ -271,7 +271,7 @@ namespace mtInternalUtils
 		std::atomic<bool> m_terminate;
 		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		stdThread m_thread;
-		std::function<void(T)> m_predicate;
+		std::function<void(T)> m_processor;
 		duration m_unitTime;
 		ULCommonUtils::RingBuffer<time_point> m_transactionLog;
 
@@ -302,7 +302,7 @@ namespace mtInternalUtils
 						std::this_thread::sleep_until(m_transactionLog.front() + m_unitTime);
 
 					m_transactionLog.push(ULCommonUtils::now());
-					m_predicate(currentItem);
+					m_processor(currentItem);
 				}
 			}
 		}
@@ -312,7 +312,7 @@ namespace mtInternalUtils
 
 		ThrottledConsumerThread(ConsumerQueue_SPtr queue, std::function<void(T)> predicate, duration unitTime, size_t numTransactions)
 			:m_queue(queue),
-			m_predicate(predicate),
+			m_processor(predicate),
 			m_unitTime(unitTime),
 			m_transactionLog(numTransactions)
 		{
@@ -361,14 +361,14 @@ namespace mtInternalUtils
 		std::shared_ptr<ULMTTools::WorkerThread> m_worker;
 		std::shared_ptr<ULMTTools::TaskScheduler> m_scheduler;
 		std::queue<T> m_pendingQueue;
-		std::function<void(T)> m_predicate;
+		std::function<void(T)> m_processor;
 		duration m_unitTime;
 		size_t m_numTransactions;
 		ULCommonUtils::RingBuffer<time_point> m_transactionLog;
 
 		void processItemAndUpdateTransactionLog(T item)
 		{
-			m_predicate(item);
+			m_processor(item);
 			m_transactionLog.push(ULCommonUtils::now());
 		}
 
@@ -431,7 +431,7 @@ namespace mtInternalUtils
 		)
 			:m_worker(worker),
 			m_scheduler(scheduler),
-			m_predicate(predicate),
+			m_processor(predicate),
 			m_unitTime(unitTime),
 			m_numTransactions(numTransactions),
 			m_transactionLog(numTransactions)
