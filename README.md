@@ -2,15 +2,17 @@
 Provides object oriented interface for multithreading applications. The library is header only.
 
 ## Build:
-- Prerequisites: CMake(3.5.0+)
-- To build unit tetsts: boost(1_87+) and GTest
+
+**There is nothing to build as the whole library is header-only if you don't want to build/run Unit Tests**
+
+## To build unit tests, following the prerequisites:
+- CMake(3.5.0+)
+- boost(1_87+) and GTest, environment **GTEST_ROOT** should be set to the googletest source directory root<br>
+  and environment **BOOST_ROOT** should be set to boost source directory root
 - On windows clang with C++20 support
 - On linux g++ with C++ support
   
 If all the prerequisites are met then just go to the root directory and run the setup.sh/setup.bat for linux/windows and you're ready to go.
-
-For examples, one can look into the unitTests directory.
-To run unitTests, you need to have boost and gtest libraries on your system and environment variables BOOST_ROOT and GTEST_ROOT defined as the root directories for these 2 libs.
 
 ## Overview of functionalities provided:
 ### Following are the classes which may be used by the client applications:
