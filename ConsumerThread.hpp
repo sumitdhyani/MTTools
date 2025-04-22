@@ -37,7 +37,6 @@ namespace mtInternalUtils
 		ConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
 		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
-		bool m_paused;//signifies whether is the thread is paused
 		stdThread m_thread;
 		std::function<void(T)> m_processor;
 
@@ -49,22 +48,17 @@ namespace mtInternalUtils
 
 				{
 					stdUniqueLock lock(m_mutex);
-
-					if (m_paused)
-						m_cond.wait(lock);
-
 					if (m_queue.empty())
 					{
 						m_consumerBusy = false;
 						m_cond.wait(lock);
 					}
 
-					m_queue.swap(local);
+					local.swap(m_queue);
 					m_consumerBusy = true;
 				}
 
-				for (auto it = local.begin(); it != local.end(); it++)
-					m_processor(*it);
+				for(auto const& task : local) m_processor(task);
 			}
 
 			//If the consumer is killed or destroyed, it should exit only after completing the pending tasks
@@ -77,8 +71,7 @@ namespace mtInternalUtils
 					ConsumerQueue local;
 					m_queue.swap(local);
 					lock.unlock();
-					for (auto it = local.begin(); it != local.end(); it++)
-						m_processor(*it);
+					for(auto const& task : local) m_processor(task);
 				}
 			}
 		}
@@ -101,7 +94,6 @@ namespace mtInternalUtils
 		{
 			m_terminate = false;
 			m_consumerBusy = false;
-			m_paused = false;
 			m_thread = stdThread(&FifoConsumerThread::run, this);
 		}
 
@@ -110,10 +102,10 @@ namespace mtInternalUtils
 			{
 				stdUniqueLock lock(m_mutex);
 				if (m_terminate)
-					throw std::runtime_error("The consumer has been killed and is no longer in a state tot process new items");
+					throw std::runtime_error("The consumer has been killed and is no longer in a state to process new items");
 				m_queue.push_back(item);
 
-				if (!(m_paused || m_consumerBusy))
+				if (!m_consumerBusy)
 				{
 					lock.unlock();
 					m_cond.notify_one();
@@ -122,44 +114,12 @@ namespace mtInternalUtils
 
 		}
 
-		void pause()
-		{
-			stdUniqueLock lock(m_mutex);
-
-			if (m_paused)
-			{
-				lock.unlock();
-				throw std::runtime_error("Thread already paused");
-			}
-			else
-				m_paused = true;
-		}
-
 		//returns number of pending items
 		size_t size()
 		{
 			stdUniqueLock lock(m_mutex);
 			return m_queue.size();
 		}
-
-		void resume()
-		{
-			stdUniqueLock lock(m_mutex);
-
-			if (!m_paused)
-			{
-				lock.unlock();
-				throw std::runtime_error("Thread already running");
-			}
-			else
-			{
-				m_paused = false;
-				lock.unlock();
-				m_cond.notify_one();
-			}
-		}
-
-		
 
 		~FifoConsumerThread()
 		{

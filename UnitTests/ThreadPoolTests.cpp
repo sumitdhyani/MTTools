@@ -81,7 +81,8 @@ TEST_F(ThreadPoolTests, TestPushingTasksFromMultipleThreads)
 
 TEST_F(ThreadPoolTests, PerformanceVsBoost)
 {
-	mt::ThreadPool worker(numCores);
+	uint8_t numThreads = 4;
+	mt::ThreadPool threadPool(numThreads);
 	mtInternal::ConditionVariable cond;
 	std::atomic<size_t> numTasksExecutedTillNow = 0;
 
@@ -98,43 +99,12 @@ TEST_F(ThreadPoolTests, PerformanceVsBoost)
 			cond.notify_one();
 	};
 
-	auto performanceRatioMine = [&worker, &func, &cond, &numTasksExecutedTillNow](size_t totalTasks, size_t numRepetetionsPerTask)
+	auto performanceRatioMine = [&threadPool, &func, &cond, &numTasksExecutedTillNow](size_t totalTasks, size_t numRepetetionsPerTask)
 	{
 		auto now = std::chrono::high_resolution_clock::now;
 		auto start = now();
 		for (size_t i = 1; i <= totalTasks; i++)
-			worker.push(std::bind(func, totalTasks, numRepetetionsPerTask, true));
-		cond.wait();
-		auto t_threadPool = now() - start;
-
-		[&numTasksExecutedTillNow,&totalTasks](){ASSERT_EQ(numTasksExecutedTillNow.load(), totalTasks);}();
-		numTasksExecutedTillNow = 0;
-		start = now();
-		for (int i = 1; i <= totalTasks; i++)
-			func(totalTasks, numRepetetionsPerTask, false);
-		auto t_singleThread = now() - start;
-
-		numTasksExecutedTillNow = 0;
-		return (double)t_threadPool.count() / (double)t_singleThread.count();
-	};
-
-	boost::asio::io_context ioService;
-	boost::thread_group threadpool;
-	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work =
-			boost::asio::make_work_guard(ioService);
-
-	for(size_t i = 0; i < numCores; i++)
-		threadpool.create_thread(
-			boost::bind(&boost::asio::io_context::run, &ioService)
-		);
-
-	auto performanceRatioBoost = [&ioService, &func, &cond, &numTasksExecutedTillNow](size_t totalTasks, size_t numRepetetionsPerTask)
-	{
-
-		auto now = std::chrono::high_resolution_clock::now;
-		auto start = now();
-		for (size_t i = 1; i <= totalTasks; i++)
-			boost::asio::post(ioService, std::bind(func, totalTasks, numRepetetionsPerTask, true));
+			threadPool.push(std::bind(func, totalTasks, numRepetetionsPerTask, true));
 		cond.wait();
 		auto t_threadPool = now() - start;
 
@@ -164,14 +134,7 @@ TEST_F(ThreadPoolTests, PerformanceVsBoost)
 
 	size_t averagingSampleSize = 10;
 	auto speedup_mine = averager(std::bind(performanceRatioMine, numTasks, numrepetetionsPerTask), averagingSampleSize);
-	auto speedup_boost = averager(std::bind(performanceRatioBoost, numTasks, numrepetetionsPerTask), averagingSampleSize);
-	std::cout << "Speedup(mine) with " << numTasks << " tasks and with each task  = " << numrepetetionsPerTask << " units is " << speedup_mine << std::endl;
-	std::cout << "Speedup(boost) with " << numTasks << " tasks and with each task  = " << numrepetetionsPerTask << " units is " << speedup_boost << std::endl;
-	auto speedup = (speedup_boost - speedup_mine) / (speedup_boost > speedup_mine ? speedup_mine : speedup_boost);
-	std::cout << "Comparative performance with boost =  " << speedup * 100 << "%" <<std::endl;
-
-	ioService.stop();
-	threadpool.join_all();
+	std::cout << "Speedup with " << numTasks << " tasks and with each task  = " << numrepetetionsPerTask << " units and concurrency = " << (int)numThreads << " is " << speedup_mine << std::endl;
 }
 
 TEST_F(ThreadPoolTests, DISABLED_TestKillByDestruction)
@@ -191,4 +154,10 @@ TEST_F(ThreadPoolTests, DISABLED_TestKillByDestruction)
 	}
 	//The destructor should have blocked until all the pending items were processed
 	ASSERT_EQ(taskExecutionCounter.load(), totalTasks);
+}
+
+int main(int argc, const char **argv)
+{
+	::testing::InitGoogleTest();
+	return RUN_ALL_TESTS();
 }

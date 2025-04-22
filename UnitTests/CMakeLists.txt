@@ -1,20 +1,29 @@
-set (ALL_HEADERS ../ThreadPool.hpp
-../TaskScheduler.hpp
-../TaskThrottlers.hpp
-../Timer.hpp
-../WorkerThread.hpp)
-
-
-set (ALL_SOURCES MTToolsTest.cpp
-ThrottlingTests.cpp
-ThreadPoolTests.cpp
-TimerTests.cpp)
-
 set (ALL_HEADERS_AND_SOURCES ${ALL_HEADERS} ${ALL_SOURCES})
 
-project(MTToolsTest)
-add_executable("${PROJECT_NAME}" "${ALL_HEADERS_AND_SOURCES}")
-add_dependencies("${PROJECT_NAME}" MTTools)
-target_include_directories("${PROJECT_NAME}" PUBLIC  "$ENV{BOOST_ROOT}" "$ENV{GTEST_ROOT}/googletest/include" "${CMAKE_SOURCE_DIR}" ..)
-target_link_directories("${PROJECT_NAME}" PUBLIC "$ENV{BOOST_ROOT}/stage/lib" "$ENV{GTEST_ROOT}/lib/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/${CMAKE_BUILD_TYPE}")
-target_link_libraries("${PROJECT_NAME}" "${GTEST_LIBS}" )
+project(ThreadPoolTests)
+add_executable(ThreadPoolTests ThreadPoolTests.cpp)
+add_dependencies(ThreadPoolTests MTTools)
+target_include_directories(ThreadPoolTests PUBLIC  "$ENV{BOOST_ROOT}" "$ENV{GTEST_ROOT}/googletest/include" "${CMAKE_SOURCE_DIR}" ..)
+target_link_directories(ThreadPoolTests PUBLIC "$ENV{BOOST_ROOT}/stage/lib" "$ENV{GTEST_ROOT}/lib/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/${CMAKE_BUILD_TYPE}")
+target_link_libraries(ThreadPoolTests "${GTEST_LIBS}" )
+
+project(ThrottlingTests)
+add_executable(ThrottlingTests ThrottlingTests.cpp)
+add_dependencies(ThrottlingTests MTTools)
+target_include_directories(ThrottlingTests PUBLIC  "$ENV{GTEST_ROOT}/googletest/include" "${CMAKE_SOURCE_DIR}" ..)
+target_link_directories(ThrottlingTests PUBLIC "$ENV{GTEST_ROOT}/lib/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/${CMAKE_BUILD_TYPE}")
+target_link_libraries(ThrottlingTests "${GTEST_LIBS}" )
+
+project(TimerTests)
+add_executable(TimerTests TimerTests.cpp)
+add_dependencies(TimerTests MTTools)
+target_include_directories(TimerTests PUBLIC  "$ENV{GTEST_ROOT}/googletest/include" "${CMAKE_SOURCE_DIR}" ..)
+target_link_directories(TimerTests PUBLIC "$ENV{GTEST_ROOT}/lib/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/${CMAKE_BUILD_TYPE}")
+target_link_libraries(TimerTests "${GTEST_LIBS}" )
+
+project(WorkerThreadTests)
+add_executable(WorkerThreadTests WorkerThreadTests.cpp)
+add_dependencies(WorkerThreadTests MTTools)
+target_include_directories(WorkerThreadTests PUBLIC  "$ENV{GTEST_ROOT}/googletest/include" "${CMAKE_SOURCE_DIR}" ..)
+target_link_directories(WorkerThreadTests PUBLIC "$ENV{GTEST_ROOT}/lib/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}" "${CMAKE_SOURCE_DIR}/${CMAKE_BUILD_TYPE}")
+target_link_libraries(WorkerThreadTests "${GTEST_LIBS}" )

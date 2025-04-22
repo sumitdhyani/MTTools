@@ -24,20 +24,15 @@ namespace ULMTTools
 			m_consumer.push(task);
 		}
 
-		void pause()
-		{
-			m_consumer.pause();
-		}
-
-		void resume()
-		{
-			m_consumer.resume();
-		}
-
 		//returns number of pending tasks 
 		size_t size()
 		{
 			return m_consumer.size();
+		}
+
+		void kill()
+		{
+			m_consumer.kill();
 		}
 	};
 	DEFINE_PTR(WorkerThread)

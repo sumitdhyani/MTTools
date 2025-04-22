@@ -1,7 +1,8 @@
 #include <vector>
-#include <gtest/gtest.h>
 #include <CommonUtils/CommonDefs.hpp>
 #include <Timer.hpp>
+#include <gtest/gtest.h>
+
 namespace mt = ULMTTools;
 namespace utils = ULCommonUtils;
 
@@ -43,16 +44,18 @@ TEST_F(BasicTimerTests, Basic)
 	};
 
 	auto id = timer.install(func, std::chrono::seconds(1));
-	std::this_thread::sleep_for(std::chrono::seconds(10));
+
+	// Sleep for 10.5 sec
+	std::this_thread::sleep_for(std::chrono::milliseconds(10500));
 	
 	{
 		stdUniqueLock lock(mutex);
-		ASSERT_EQ(taskExecutionTimestamps.size(), 10);
+		ASSERT_EQ(taskExecutionTimestamps.size(), 11);
 	}
 
 	std::this_thread::sleep_for(std::chrono::seconds(5));
 	timer.unInstall(id);
-	ASSERT_EQ(taskExecutionTimestamps.size(), 15);
+	ASSERT_EQ(taskExecutionTimestamps.size(), 16);
 }
 
 
@@ -75,22 +78,24 @@ TEST_F(AdvancedTimerTests, MultipleTimers)
 	size_t id1 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps1)), p1);
 	size_t id2 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps2)), p2);
 	size_t id3 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps3)), p3);
-	std::this_thread::sleep_for(p1*30);
+
+	// Sleep for 31.5 sec
+	std::this_thread::sleep_for(p1*30 + std::chrono::milliseconds(500));
 	
 	{
 		stdUniqueLock lock(mutex);
-		ASSERT_EQ(taskExecutionTimestamps1.size(), 30);
-		ASSERT_EQ(taskExecutionTimestamps2.size(), 15);
-		ASSERT_EQ(taskExecutionTimestamps3.size(), 10);
+		ASSERT_EQ(taskExecutionTimestamps1.size(), 31);
+		ASSERT_EQ(taskExecutionTimestamps2.size(), 16);
+		ASSERT_EQ(taskExecutionTimestamps3.size(), 11);
 	}
 
 	std::this_thread::sleep_for(p1*12);
 	timer.unInstall(id1);
 	timer.unInstall(id2);
 	timer.unInstall(id3);
-	ASSERT_EQ(taskExecutionTimestamps1.size(), 42);
-	ASSERT_EQ(taskExecutionTimestamps2.size(), 21);
-	ASSERT_EQ(taskExecutionTimestamps3.size(), 14);
+	ASSERT_EQ(taskExecutionTimestamps1.size(), 43);
+	ASSERT_EQ(taskExecutionTimestamps2.size(), 22);
+	ASSERT_EQ(taskExecutionTimestamps3.size(), 15);
 }
 
 
@@ -121,21 +126,26 @@ TEST_F(AdvancedTimerTests, MultipleTimersFromMultipleThreads)
 	t2.join();
 	t3.join();
 
-	std::this_thread::sleep_for(p1*30);
+	std::this_thread::sleep_for(p1*30 + std::chrono::milliseconds(500));
 	
 	{
 		stdUniqueLock lock(mutex);
-		ASSERT_EQ(taskExecutionTimestamps1.size(), 30);
-		ASSERT_EQ(taskExecutionTimestamps2.size(), 15);
-		ASSERT_EQ(taskExecutionTimestamps3.size(), 10);
+		ASSERT_EQ(taskExecutionTimestamps1.size(), 31);
+		ASSERT_EQ(taskExecutionTimestamps2.size(), 16);
+		ASSERT_EQ(taskExecutionTimestamps3.size(), 11);
 	}
 
 	std::this_thread::sleep_for(p1*12);
 	timer.unInstall(id1);
 	timer.unInstall(id2);
 	timer.unInstall(id3);
-	ASSERT_EQ(taskExecutionTimestamps1.size(), 42);
-	ASSERT_EQ(taskExecutionTimestamps2.size(), 21);
-	ASSERT_EQ(taskExecutionTimestamps3.size(), 14);
+	ASSERT_EQ(taskExecutionTimestamps1.size(), 43);
+	ASSERT_EQ(taskExecutionTimestamps2.size(), 22);
+	ASSERT_EQ(taskExecutionTimestamps3.size(), 15);
 }
 
+int main(int argc, const char **argv)
+{
+	::testing::InitGoogleTest();
+	return RUN_ALL_TESTS();
+}
