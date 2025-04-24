@@ -41,8 +41,6 @@ if(NOT TARGET CommonUtils)
 	execute_process(COMMAND git clone https://github.com/sumitdhyani/CommonUtils.git "${CMAKE_SOURCE_DIR}/CommonUtils")
 endif()
 
-add_subdirectory(CommonUtils)
-
 set(ALL_SOURCES ConditionVariable.hpp
 TaskScheduler.hpp
 TaskThrottlers.hpp
@@ -54,7 +52,6 @@ WorkerThread.hpp)
 
 project(MTTools)
 add_library("${PROJECT_NAME}" STATIC  "${ALL_SOURCES}")
-add_dependencies("${PROJECT_NAME}" CommonUtils)
 #Needed for quaified paths, for projects which have external dependencies
 target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_SOURCE_DIR}")
 set_target_properties("${PROJECT_NAME}" PROPERTIES LINKER_LANGUAGE CXX)
