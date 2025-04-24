@@ -5,12 +5,11 @@ Provides object oriented interface for multithreading applications. The library 
 
 **There is nothing to build as the whole library is header-only if you don't want to build/run Unit Tests**
 
-## To build unit tests, following the prerequisites:
+## To build unit tests, following are the prerequisites:
 - CMake(3.5.0+)
-- boost(1_87+) and GTest, environment **GTEST_ROOT** should be set to the googletest source directory root<br>
-  and environment **BOOST_ROOT** should be set to boost source directory root
+- GTest, environment variable **GTEST_ROOT** should be set to the googletest source directory root
 - On windows clang with C++20 support
-- On linux g++ with C++ support
+- On linux g++ with C++20 support
   
 If all the prerequisites are met then just go to the root directory and run the setup.sh/setup.bat for linux/windows and you're ready to go.
 

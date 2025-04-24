@@ -1,8 +1,4 @@
 #include <ThreadPool.hpp>
-#include <boost/asio.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/bind.hpp>
-#include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
 
 namespace mt = ULMTTools;
@@ -79,7 +75,7 @@ TEST_F(ThreadPoolTests, TestPushingTasksFromMultipleThreads)
 	ASSERT_EQ(totalTasks, taskExecutionCounter.load());
 }
 
-TEST_F(ThreadPoolTests, PerformanceVsBoost)
+TEST_F(ThreadPoolTests, PerformanceVsSingleThreaded)
 {
 	uint8_t numThreads = 4;
 	mt::ThreadPool threadPool(numThreads);
