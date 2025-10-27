@@ -8,10 +8,7 @@ namespace ULMTTools
 	{
 		friend class ThreadPool;
 		typedef mtInternalUtils::FifoConsumerThread<Task> Consumer;
-		typedef Consumer::ConsumerQueue TaskQueue;
-		DEFINE_PTR(TaskQueue)
-
-			Consumer m_consumer;
+		Consumer m_consumer;
 
 	public:
 		WorkerThread()

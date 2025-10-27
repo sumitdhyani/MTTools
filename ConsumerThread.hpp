@@ -21,11 +21,10 @@ class TaskScheduler;
 
 namespace mtInternalUtils
 {
-	//Keep the template parameter as something assignable and copyable, otherwise results may be underministic
 	template <class T>
+	requires std::is_copy_constructible_v<T>
 	class FifoConsumerThread
 	{
-		friend class ULMTTools::WorkerThread;
 	protected:
 		typedef std::vector<T> ConsumerQueue;
 		DEFINE_PTR(ConsumerQueue)
@@ -36,9 +35,9 @@ namespace mtInternalUtils
 		stdMutex m_mutex;
 		ConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
-		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
-		stdThread m_thread;
+		bool m_consumerWaiting;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		std::function<void(T)> m_processor;
+		stdThread m_thread;
 
 		void run()
 		{
@@ -50,15 +49,18 @@ namespace mtInternalUtils
 					stdUniqueLock lock(m_mutex);
 					if (m_queue.empty())
 					{
-						m_consumerBusy = false;
+						m_consumerWaiting = true;
 						m_cond.wait(lock);
 					}
 
-					local.swap(m_queue);
-					m_consumerBusy = true;
+					local = std::move(m_queue);
+					m_consumerWaiting = false;
 				}
 
-				for(auto const& task : local) m_processor(task);
+				for(auto const& task : local)
+				{
+					m_processor(task);
+				}
 			}
 
 			//If the consumer is killed or destroyed, it should exit only after completing the pending tasks
@@ -69,11 +71,47 @@ namespace mtInternalUtils
 				if (!m_queue.empty())
 				{
 					ConsumerQueue local;
-					m_queue.swap(local);
+					local = std::move(m_queue);
 					lock.unlock();
-					for(auto const& task : local) m_processor(task);
+					for(auto const& task : local)
+					{
+						m_processor(task);
+					}
 				}
 			}
+		}
+
+	public:
+		FifoConsumerThread(const std::function<void(T)> &processor)
+			: m_processor(processor),
+				m_terminate(false),
+				m_consumerWaiting(false),
+				m_thread(stdThread([this](){ run(); }))
+		{}
+
+		bool push(const T& item)
+		{
+			{
+				stdUniqueLock lock(m_mutex);
+				if (m_terminate) return false;
+
+				m_queue.push_back(item);
+
+				if (m_consumerWaiting)
+				{
+					lock.unlock();
+					m_cond.notify_one();
+				}
+			}
+
+			return true;
+		}
+
+		//returns number of pending items
+		size_t size()
+		{
+			stdUniqueLock lock(m_mutex);
+			return m_queue.size();
 		}
 
 		void kill()
@@ -86,39 +124,6 @@ namespace mtInternalUtils
 				m_cond.notify_one();
 				m_thread.join();
 			}
-		}
-
-	public:
-		FifoConsumerThread(std::function<void(T)> predicate)
-			:m_processor(predicate)
-		{
-			m_terminate = false;
-			m_consumerBusy = false;
-			m_thread = stdThread(&FifoConsumerThread::run, this);
-		}
-
-		void push(const T& item)
-		{
-			{
-				stdUniqueLock lock(m_mutex);
-				if (m_terminate)
-					throw std::runtime_error("The consumer has been killed and is no longer in a state to process new items");
-				m_queue.push_back(item);
-
-				if (!m_consumerBusy)
-				{
-					lock.unlock();
-					m_cond.notify_one();
-				}
-			}
-
-		}
-
-		//returns number of pending items
-		size_t size()
-		{
-			stdUniqueLock lock(m_mutex);
-			return m_queue.size();
 		}
 
 		~FifoConsumerThread()
@@ -141,8 +146,8 @@ namespace mtInternalUtils
 		ConditionVariable m_cond;
 		std::map<time_point, std::vector<T>> m_processingQueue;
 		std::atomic<bool> m_terminate;
-		stdThread m_thread;
 		std::function<void(T)> m_processor;
+		stdThread m_thread;
 
 		void kill()
 		{
@@ -157,13 +162,11 @@ namespace mtInternalUtils
 		}
 
 	public:
-
-		Scheduler(std::function<void(T)> predicate)
-			:m_processor(predicate)
-		{
-			m_terminate = false;
-			m_thread = stdThread(&Scheduler::run, this);
-		}
+		Scheduler(const std::function<void(T)> &processor)
+				: m_processor(processor),
+					m_terminate(false),
+					m_thread(stdThread([this](){ run(); }))
+		{}
 
 		void push(const time_point& t, const T& item)
 		{
@@ -206,7 +209,9 @@ namespace mtInternalUtils
 						m_cond.wait_until(it->first);
 				}
 				else
+				{
 					m_cond.wait();
+				}
 			}
 		}
 
@@ -354,9 +359,9 @@ namespace mtInternalUtils
 		{
 			//there are still some pending items so, queue it up behind them, even if the bandwidth is available
 			//so as not to spoil the fifo order
-			if (!m_pendingQueue.empty())
+			[[likely]]if (!m_pendingQueue.empty())
 				m_pendingQueue.push(item);
-			else if (!bandWidthAvailable())//no pending items but bandwidth is unavailable, scehdule the processing event for next available timeslot
+			else [[unlikely]]if (!bandWidthAvailable()) // no pending items but bandwidth is unavailable, scehdule the processing event for next available timeslot
 			{
 				m_pendingQueue.push(item);
 				scheduleBandwidthAvailableEvent(m_transactionLog.front() + m_unitTime);
