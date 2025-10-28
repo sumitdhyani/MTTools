@@ -13,12 +13,6 @@
 typedef std::function<void()> Task;
 
 
-namespace ULMTTools {
-class WorkerThread;
-class TaskScheduler;
-}
-
-
 namespace mtInternalUtils
 {
 	template <class T>
@@ -229,7 +223,7 @@ namespace mtInternalUtils
 		DEFINE_PTR(ConsumerQueue)
 
 	private:
-		ConsumerQueue_SPtr m_queue;
+		ConsumerQueue m_queue;
 		stdMutex m_mutex;
 		ConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
@@ -248,13 +242,13 @@ namespace mtInternalUtils
 				{
 					stdUniqueLock lock(m_mutex);
 
-					if (m_queue->empty())
+					if (m_queue.empty())
 					{
 						m_consumerBusy = false;
 						m_cond.wait(lock);
 					}
 
-					m_queue->swap(local);
+					m_queue.swap(local);
 					m_consumerBusy = true;
 				}
 
@@ -274,9 +268,8 @@ namespace mtInternalUtils
 
 	public:
 
-		ThrottledConsumerThread(ConsumerQueue_SPtr queue, std::function<void(const T&)> processor, duration unitTime, size_t numTransactions)
-			:m_queue(queue),
-			m_processor(processor),
+		ThrottledConsumerThread(std::function<void(const T&)> processor, duration unitTime, size_t numTransactions)
+			:m_processor(processor),
 			m_unitTime(unitTime),
 			m_transactionLog(numTransactions)
 		{
@@ -289,7 +282,7 @@ namespace mtInternalUtils
 		{
 			{
 				stdUniqueLock lock(m_mutex);
-				m_queue->push_back(item);
+				m_queue.push_back(item);
 
 				if (!m_consumerBusy)
 				{
@@ -322,8 +315,14 @@ namespace mtInternalUtils
 	class ReusableThrottler
 	{
 	private:
-		std::shared_ptr<ULMTTools::WorkerThread> m_worker;
-		std::shared_ptr<ULMTTools::TaskScheduler> m_scheduler;
+
+		// A function that executes the provided task in its own thread, separate from this thread
+		typedef std::function<void(const Task &)> WorkerThreadFunction;
+		// A function that executes the provided task at the given time in its own thread, separate from this thread
+		typedef std::function<void(const time_point&, const Task &)> TaskSchedulerFunction;
+
+		WorkerThreadFunction m_worker;
+		TaskSchedulerFunction m_scheduler;
 		std::queue<T> m_pendingQueue;
 		std::function<void(const T&)> m_processor;
 		duration m_unitTime;
@@ -345,9 +344,9 @@ namespace mtInternalUtils
 
 		void scheduleBandwidthAvailableEvent(time_point scheduleTime)
 		{
-			m_scheduler->push(scheduleTime, [this, scheduleTime]()
+			m_scheduler(scheduleTime, [this, scheduleTime]()
 			{
-				m_worker->push([this, scheduleTime]()
+				m_worker([this, scheduleTime]()
 				{
 					onBandwidthAvailable(scheduleTime);
 				});
@@ -386,25 +385,23 @@ namespace mtInternalUtils
 		}
 
 	public:
-
-		ReusableThrottler(std::shared_ptr<ULMTTools::WorkerThread> worker,
-			std::shared_ptr<ULMTTools::TaskScheduler> scheduler,
-			std::function<void(const T&)> processor,
-			duration unitTime,
-			size_t numTransactions
-		)
-			:m_worker(worker),
-			m_scheduler(scheduler),
-			m_processor(processor),
-			m_unitTime(unitTime),
-			m_numTransactions(numTransactions),
-			m_transactionLog(numTransactions)
+		ReusableThrottler(const WorkerThreadFunction& worker,
+											const TaskSchedulerFunction& scheduler,
+											std::function<void(const T&)> processor,
+											duration unitTime,
+											size_t numTransactions)
+				: m_worker(worker),
+					m_scheduler(scheduler),
+					m_processor(processor),
+					m_unitTime(unitTime),
+					m_numTransactions(numTransactions),
+					m_transactionLog(numTransactions)
 		{
 		}
 
 		void push(const T& item)
 		{
-			m_worker->push([this, item]() {tryProcess(item); });
+			m_worker([this, item]() {tryProcess(item); });
 		}
 
 		void kill()
