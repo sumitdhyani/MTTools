@@ -36,7 +36,7 @@ namespace mtInternalUtils
 		ConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
 		bool m_consumerWaiting;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
-		std::function<void(T)> m_processor;
+		std::function<void(const T&)> m_processor;
 		stdThread m_thread;
 
 		void run()
@@ -51,15 +51,15 @@ namespace mtInternalUtils
 					{
 						m_consumerWaiting = true;
 						m_cond.wait(lock);
+						m_consumerWaiting = false;
 					}
 
 					local = std::move(m_queue);
-					m_consumerWaiting = false;
 				}
 
-				for(auto const& task : local)
+				for(auto const& item : local)
 				{
-					m_processor(task);
+					m_processor(item);
 				}
 			}
 
@@ -73,16 +73,16 @@ namespace mtInternalUtils
 					ConsumerQueue local;
 					local = std::move(m_queue);
 					lock.unlock();
-					for(auto const& task : local)
+					for(auto const& item : local)
 					{
-						m_processor(task);
+						m_processor(item);
 					}
 				}
 			}
 		}
 
 	public:
-		FifoConsumerThread(const std::function<void(T)> &processor)
+		FifoConsumerThread(const std::function<void(const T&)> &processor)
 			: m_processor(processor),
 				m_terminate(false),
 				m_consumerWaiting(false),
@@ -138,7 +138,6 @@ namespace mtInternalUtils
 	protected:
 		typedef std::pair<time_point, T> TimeItemPair;
 		typedef std::vector<TimeItemPair> ConsumerQueue;
-		DEFINE_PTR(ConsumerQueue)
 
 	private:
 		ConsumerQueue m_itemQueue;
@@ -146,7 +145,7 @@ namespace mtInternalUtils
 		ConditionVariable m_cond;
 		std::map<time_point, std::vector<T>> m_processingQueue;
 		std::atomic<bool> m_terminate;
-		std::function<void(T)> m_processor;
+		std::function<void(const T&)> m_processor;
 		stdThread m_thread;
 
 		void kill()
@@ -162,7 +161,7 @@ namespace mtInternalUtils
 		}
 
 	public:
-		Scheduler(const std::function<void(T)> &processor)
+		Scheduler(const std::function<void(const T&)> &processor)
 				: m_processor(processor),
 					m_terminate(false),
 					m_thread(stdThread([this](){ run(); }))
@@ -190,27 +189,27 @@ namespace mtInternalUtils
 						m_itemQueue.swap(local);
 					}
 
-					for (auto currentItem : local)
-						m_processingQueue[currentItem.first].push_back(currentItem.second);
+					for (auto const& item : local)
+						m_processingQueue[item.first].push_back(item.second);
 				}
 
-				auto it = m_processingQueue.begin();
-				if (!m_processingQueue.empty())
+				for (auto it = m_processingQueue.begin();
+						 it != m_processingQueue.end() && it->first <= ULCommonUtils::now();
+						 m_processingQueue.erase(it), it = m_processingQueue.begin())
 				{
-					if (it->first <= ULCommonUtils::now())
+					for (auto const& item : it->second)
 					{
-						auto& processingQueue = it->second;
-						for (auto& item : processingQueue)
-							m_processor(item);
-
-						m_processingQueue.erase(it);
+						m_processor(item);
 					}
-					else
-						m_cond.wait_until(it->first);
+				}
+
+				if(auto it = m_processingQueue.begin(); it == m_processingQueue.end())
+				{
+					m_cond.wait();
 				}
 				else
 				{
-					m_cond.wait();
+					m_cond.wait_until(it->first);
 				}
 			}
 		}
@@ -236,7 +235,7 @@ namespace mtInternalUtils
 		std::atomic<bool> m_terminate;
 		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		stdThread m_thread;
-		std::function<void(T)> m_processor;
+		std::function<void(const T&)> m_processor;
 		duration m_unitTime;
 		ULCommonUtils::RingBuffer<time_point> m_transactionLog;
 
@@ -259,7 +258,7 @@ namespace mtInternalUtils
 					m_consumerBusy = true;
 				}
 
-				for (auto const& currentItem : local)
+				for (auto const& item : local)
 				{
 					if (m_transactionLog.full() &&
 						((ULCommonUtils::now() - m_transactionLog.front()) <= m_unitTime)
@@ -267,7 +266,7 @@ namespace mtInternalUtils
 						std::this_thread::sleep_until(m_transactionLog.front() + m_unitTime);
 
 					m_transactionLog.push(ULCommonUtils::now());
-					m_processor(currentItem);
+					m_processor(item);
 				}
 			}
 		}
@@ -275,9 +274,9 @@ namespace mtInternalUtils
 
 	public:
 
-		ThrottledConsumerThread(ConsumerQueue_SPtr queue, std::function<void(T)> predicate, duration unitTime, size_t numTransactions)
+		ThrottledConsumerThread(ConsumerQueue_SPtr queue, std::function<void(const T&)> processor, duration unitTime, size_t numTransactions)
 			:m_queue(queue),
-			m_processor(predicate),
+			m_processor(processor),
 			m_unitTime(unitTime),
 			m_transactionLog(numTransactions)
 		{
@@ -326,12 +325,12 @@ namespace mtInternalUtils
 		std::shared_ptr<ULMTTools::WorkerThread> m_worker;
 		std::shared_ptr<ULMTTools::TaskScheduler> m_scheduler;
 		std::queue<T> m_pendingQueue;
-		std::function<void(T)> m_processor;
+		std::function<void(const T&)> m_processor;
 		duration m_unitTime;
 		size_t m_numTransactions;
 		ULCommonUtils::RingBuffer<time_point> m_transactionLog;
 
-		void processItemAndUpdateTransactionLog(T item)
+		void processItemAndUpdateTransactionLog(const T& item)
 		{
 			m_processor(item);
 			m_transactionLog.push(ULCommonUtils::now());
@@ -390,13 +389,13 @@ namespace mtInternalUtils
 
 		ReusableThrottler(std::shared_ptr<ULMTTools::WorkerThread> worker,
 			std::shared_ptr<ULMTTools::TaskScheduler> scheduler,
-			std::function<void(T)> predicate,
+			std::function<void(const T&)> processor,
 			duration unitTime,
 			size_t numTransactions
 		)
 			:m_worker(worker),
 			m_scheduler(scheduler),
-			m_processor(predicate),
+			m_processor(processor),
 			m_unitTime(unitTime),
 			m_numTransactions(numTransactions),
 			m_transactionLog(numTransactions)
