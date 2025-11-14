@@ -21,7 +21,6 @@ namespace mtInternalUtils
 	{
 	protected:
 		typedef std::vector<T> ConsumerQueue;
-		DEFINE_PTR(ConsumerQueue)
 
 		
 	private:
@@ -336,9 +335,8 @@ namespace mtInternalUtils
 
 		bool bandWidthAvailable()
 		{
-			return	!((m_transactionLog.full()) &&
-					  ((ULCommonUtils::now() - m_transactionLog.front()) < m_unitTime)
-					 );
+			return	!m_transactionLog.full() || 
+							(ULCommonUtils::now() - m_transactionLog.front()) >= m_unitTime;
 		}
 
 		void scheduleBandwidthAvailableEvent(time_point scheduleTime)
