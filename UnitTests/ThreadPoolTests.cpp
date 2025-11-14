@@ -133,7 +133,7 @@ TEST_F(ThreadPoolTests, PerformanceVsSingleThreaded)
 	std::cout << "Speedup with " << numTasks << " tasks and with each task  = " << numrepetetionsPerTask << " units and concurrency = " << (int)numThreads << " is " << speedup_mine << std::endl;
 }
 
-TEST_F(ThreadPoolTests, DISABLED_TestKillByDestruction)
+TEST_F(ThreadPoolTests, TestKillByDestruction)
 {
 	{
 		mt::ThreadPool worker(numCores);

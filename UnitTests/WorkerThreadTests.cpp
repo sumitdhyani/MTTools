@@ -74,7 +74,7 @@ TEST_F(WorkerThreadTests, TestPushingTasksFromMultipleThreads)
 	ASSERT_EQ(totalTasks, taskExecutionCounter.load());
 }
 
-TEST_F(WorkerThreadTests, DISABLED_TestKillByDestruction)
+TEST_F(WorkerThreadTests, TestKillByDestruction)
 {
 	{
 		mt::WorkerThread worker;
