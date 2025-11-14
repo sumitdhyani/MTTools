@@ -7,9 +7,8 @@ namespace ULMTTools
 	{
 		typedef std::pair<time_point, Task> TimeTaskPair;
 		typedef mtInternalUtils::Scheduler<Task> Scheduler;
-		DEFINE_UNIQUE_PTR(Scheduler)
 
-			Scheduler m_timedConsumer;
+		Scheduler m_timedConsumer;
 	public:
 
 		TaskScheduler() : m_timedConsumer([](Task task) {task(); })

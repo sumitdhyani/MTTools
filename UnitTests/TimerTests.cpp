@@ -71,16 +71,16 @@ TEST_F(AdvancedTimerTests, MultipleTimers)
 	};
 
 
-	duration p1 = std::chrono::milliseconds(1000);
-	duration p2 = p1 * 2;
-	duration p3 = p1 * 3;
+	duration f1 = std::chrono::seconds(1);
+	duration f2 = f1 * 2;
+	duration f3 = f1 * 3;
 
-	size_t id1 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps1)), p1);
-	size_t id2 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps2)), p2);
-	size_t id3 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps3)), p3);
+	size_t id1 = timer.install([this, &func](){ func(taskExecutionTimestamps1); }, f1);
+	size_t id2 = timer.install([this, &func](){ func(taskExecutionTimestamps2); }, f2);
+	size_t id3 = timer.install([this, &func](){ func(taskExecutionTimestamps3); }, f3);
 
 	// Sleep for 31.5 sec
-	std::this_thread::sleep_for(p1*30 + std::chrono::milliseconds(500));
+	std::this_thread::sleep_for(f1*30 + std::chrono::milliseconds(500));
 	
 	{
 		stdUniqueLock lock(mutex);
@@ -89,10 +89,17 @@ TEST_F(AdvancedTimerTests, MultipleTimers)
 		ASSERT_EQ(taskExecutionTimestamps3.size(), 11);
 	}
 
-	std::this_thread::sleep_for(p1*12);
+	std::this_thread::sleep_for(f1*12);
+	ASSERT_EQ(taskExecutionTimestamps1.size(), 43);
+	ASSERT_EQ(taskExecutionTimestamps2.size(), 22);
+	ASSERT_EQ(taskExecutionTimestamps3.size(), 15);
+
 	timer.unInstall(id1);
 	timer.unInstall(id2);
 	timer.unInstall(id3);
+
+	std::this_thread::sleep_for(f1 * 6);
+
 	ASSERT_EQ(taskExecutionTimestamps1.size(), 43);
 	ASSERT_EQ(taskExecutionTimestamps2.size(), 22);
 	ASSERT_EQ(taskExecutionTimestamps3.size(), 15);
@@ -114,19 +121,27 @@ TEST_F(AdvancedTimerTests, MultipleTimersFromMultipleThreads)
 	size_t id2;
 	size_t id3;
 
-	duration p1 = std::chrono::milliseconds(1000);
-	duration p2 = p1 * 2;
-	duration p3 = p1 * 3;
+	duration f1 = std::chrono::seconds(1);
+	duration f2 = f1 * 2;
+	duration f3 = f1 * 3;
 
-	std::thread t1([this, &timer, &func, &id1, p1]() {id1 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps1)), p1); });
-	std::thread t2([this, &timer, &func, &id2, p2]() {id2 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps2)), p2); });
-	std::thread t3([this, &timer, &func, &id3, p3]() {id3 = timer.install(std::bind(func, std::ref(taskExecutionTimestamps3)), p3); });
+	std::thread t1([this, &timer, &func, &id1, f1]() {
+		id1 = timer.install([&](){ func(taskExecutionTimestamps1); }, f1); 
+	});
+
+	std::thread t2([this, &timer, &func, &id2, f2]() {
+		 id2 = timer.install([&](){ func(taskExecutionTimestamps2); }, f2); 
+	});
+
+	std::thread t3([this, &timer, &func, &id3, f3]() {
+		id3 = timer.install([&](){ func(taskExecutionTimestamps3); }, f3);
+	});
 
 	t1.join();
 	t2.join();
 	t3.join();
 
-	std::this_thread::sleep_for(p1*30 + std::chrono::milliseconds(500));
+	std::this_thread::sleep_for(f1*30 + std::chrono::milliseconds(500));
 	
 	{
 		stdUniqueLock lock(mutex);
@@ -135,10 +150,17 @@ TEST_F(AdvancedTimerTests, MultipleTimersFromMultipleThreads)
 		ASSERT_EQ(taskExecutionTimestamps3.size(), 11);
 	}
 
-	std::this_thread::sleep_for(p1*12);
+	std::this_thread::sleep_for(f1*12);
+	ASSERT_EQ(taskExecutionTimestamps1.size(), 43);
+	ASSERT_EQ(taskExecutionTimestamps2.size(), 22);
+	ASSERT_EQ(taskExecutionTimestamps3.size(), 15);
+
 	timer.unInstall(id1);
 	timer.unInstall(id2);
 	timer.unInstall(id3);
+	
+	std::this_thread::sleep_for(f1 * 6);
+
 	ASSERT_EQ(taskExecutionTimestamps1.size(), 43);
 	ASSERT_EQ(taskExecutionTimestamps2.size(), 22);
 	ASSERT_EQ(taskExecutionTimestamps3.size(), 15);

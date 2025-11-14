@@ -149,7 +149,7 @@ namespace mtInternalUtils
 			{
 				m_terminate = true;
 				lock.unlock();//Ugly but necessary
-				m_cond.notify_all();
+				m_cond.notify_one();
 				m_thread.join();
 			}
 		}
@@ -165,7 +165,7 @@ namespace mtInternalUtils
 		{
 			{
 				stdUniqueLock lock(m_mutex);
-				m_itemQueue.push_back(TimeItemPair(t, item));
+				m_itemQueue.emplace_back(t, item);
 			}
 
 			m_cond.notify_one();
@@ -220,7 +220,6 @@ namespace mtInternalUtils
 	{
 	protected:
 		typedef std::vector<T> ConsumerQueue;
-		DEFINE_PTR(ConsumerQueue)
 
 	private:
 		ConsumerQueue m_queue;
