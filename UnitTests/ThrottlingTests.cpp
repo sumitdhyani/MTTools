@@ -11,7 +11,7 @@ namespace mtInternal = mtInternalUtils;
 
 struct ThrottlingTests : ::testing::Test 
 {
-	int totalTasks;
+	size_t totalTasks;
 	std::atomic<int> taskExecutionCounter;
 	std::vector<time_point> taskExecutionTimestamps;
 	duration unitTime;
@@ -31,7 +31,9 @@ struct ReusableThrottlerTests : ::testing::Test
 	size_t totalTasks1;
 	size_t totalTasks2;
 	size_t totalTasks;
-	duration unitTime;
+
+	duration unitTime1;
+	duration unitTime2;
 	size_t bandwidth1;//1000 transactions/sec
 	size_t bandwidth2;//2000 transactions/sec
 	std::vector<time_point> taskExecutionTimestamps1;
@@ -39,9 +41,10 @@ struct ReusableThrottlerTests : ::testing::Test
 	size_t taskExecutionCounter;
 	virtual void SetUp()
 	{
-		unitTime = std::chrono::seconds(1);
-		bandwidth1 = 1000;//100 transactions/sec
-		bandwidth2 = 2000;//200 transactions/sec
+		unitTime1 = std::chrono::seconds(1);
+		unitTime2 = std::chrono::seconds(2);
+		bandwidth1 = 1000;//1000 transactions/sec
+		bandwidth2 = 3000;//2000 transactions/sec
 		totalTasks1 = bandwidth1 * 10;
 		totalTasks2 = bandwidth2 * 10;
 		totalTasks = totalTasks1 + totalTasks2;
@@ -160,8 +163,8 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 	auto worker = std::make_shared<mt::WorkerThread>();
 	auto scheduler = std::make_shared<mt::TaskScheduler>();
 	
-	mt::ReusableThrottledWorkerThread throttler1(worker, scheduler, unitTime, bandwidth1);
-	mt::ReusableThrottledWorkerThread throttler2(worker, scheduler, unitTime, bandwidth2);
+	mt::ReusableThrottledWorkerThread throttler1(worker, scheduler, unitTime1, bandwidth1);
+	mt::ReusableThrottledWorkerThread throttler2(worker, scheduler, unitTime2, bandwidth2);
 	mtInternal::ConditionVariable cond;
 
 
@@ -204,7 +207,8 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 	ASSERT_EQ(taskExecutionTimestamps1.size(), totalTasks1);
 	ASSERT_EQ(taskExecutionTimestamps2.size(), totalTasks2);
 	
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps1[0],taskExecutionTimestamps1[0] + unitTime, 0, 1};
+	size_t numSections = 0;
+	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps1[0],taskExecutionTimestamps1[0] + unitTime1, 0, 1};
 		 endIndex <= taskExecutionTimestamps1.size();
 		 endIndex++
 		)
@@ -212,19 +216,24 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 		if (endIndex == taskExecutionTimestamps1.size())
 		{
 			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime);
+			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
+			++numSections;
 		}
 		else if (taskExecutionTimestamps1[endIndex] >= timeWindowEnd)
 		{
 			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime);
-			timeWindowStart += unitTime;
-			timeWindowEnd = timeWindowStart + unitTime;
+			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
+			timeWindowStart += unitTime1;
+			timeWindowEnd = timeWindowStart + unitTime1;
 			startIndex = endIndex;
+			++numSections;
 		}
 	}
 
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps2[0],taskExecutionTimestamps2[0] + unitTime, 0, 1};
+	ASSERT_EQ(numSections, (size_t)(totalTasks1 / bandwidth1));
+
+	numSections = 0;
+	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps2[0],taskExecutionTimestamps2[0] + unitTime2, 0, 1};
 		 endIndex <= taskExecutionTimestamps2.size();
 		 endIndex++
 		)
@@ -232,27 +241,32 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 		if (endIndex == taskExecutionTimestamps2.size())
 		{
 			ASSERT_EQ(endIndex - startIndex, bandwidth2);
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime);
+			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
+			++numSections;
 		}
 		else if (taskExecutionTimestamps2[endIndex] >= timeWindowEnd)
 		{
 			//Ensure we are not overdoing the bandwidth
 			ASSERT_EQ(endIndex - startIndex, bandwidth2);
 			//Ensure we are not underdoing the bandwidth
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime);
-			timeWindowStart += unitTime;
-			timeWindowEnd = timeWindowStart + unitTime;
+			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
+			timeWindowStart += unitTime2;
+			timeWindowEnd = timeWindowStart + unitTime2;
 			startIndex = endIndex;
+			++numSections;
 		}
 	}
+
+	ASSERT_EQ(numSections, (size_t)(totalTasks2 / bandwidth2));
+
 }
 
 TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 {
 	auto worker = std::make_shared<mt::WorkerThread>();
 	auto scheduler = std::make_shared<mt::TaskScheduler>();
-	mt::ReusableThrottledWorkerThread throttler1(worker, scheduler, unitTime, bandwidth1);
-	mt::ReusableThrottledWorkerThread throttler2(worker, scheduler, unitTime, bandwidth2);
+	mt::ReusableThrottledWorkerThread throttler1(worker, scheduler, unitTime1, bandwidth1);
+	mt::ReusableThrottledWorkerThread throttler2(worker, scheduler, unitTime2, bandwidth2);
 	mtInternal::ConditionVariable cond;
 
 	auto func1 = [this, &cond]()
@@ -304,8 +318,9 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
 	ASSERT_EQ(taskExecutionTimestamps1.size(), totalTasks1);
 	ASSERT_EQ(taskExecutionTimestamps2.size(), totalTasks2);
-	
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps1[0],taskExecutionTimestamps1[0] + unitTime, 0, 1};
+
+	size_t numSections = 0;
+	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps1[0],taskExecutionTimestamps1[0] + unitTime1, 0, 1};
 		 endIndex <= taskExecutionTimestamps1.size();
 		 endIndex++
 		)
@@ -313,19 +328,24 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 		if (endIndex == taskExecutionTimestamps1.size())
 		{
 			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime);
+			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
+			++numSections;
 		}
 		else if (taskExecutionTimestamps1[endIndex] >= timeWindowEnd)
 		{
 			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime);
-			timeWindowStart += unitTime;
-			timeWindowEnd = timeWindowStart + unitTime;
+			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
+			timeWindowStart += unitTime1;
+			timeWindowEnd = timeWindowStart + unitTime1;
 			startIndex = endIndex;
+			++numSections;
 		}
 	}
 
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps2[0],taskExecutionTimestamps2[0] + unitTime, 0, 1};
+	ASSERT_EQ(numSections, (size_t)(totalTasks1/bandwidth1));
+
+	numSections = 0;
+	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps2[0],taskExecutionTimestamps2[0] + unitTime2, 0, 1};
 		 endIndex <= taskExecutionTimestamps2.size();
 		 endIndex++
 		)
@@ -333,19 +353,23 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 		if (endIndex == taskExecutionTimestamps2.size())
 		{
 			ASSERT_EQ(endIndex - startIndex, bandwidth2);
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime);
+			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
+			++numSections;
 		}
 		else if (taskExecutionTimestamps2[endIndex] >= timeWindowEnd)
 		{
 			//Ensure we are not overdoing the bandwidth
 			ASSERT_EQ(endIndex - startIndex, bandwidth2);
 			//Ensure we are not underdoing the bandwidth
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime);
-			timeWindowStart += unitTime;
-			timeWindowEnd = timeWindowStart + unitTime;
+			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
+			timeWindowStart += unitTime2;
+			timeWindowEnd = timeWindowStart + unitTime2;
 			startIndex = endIndex;
+			++numSections;
 		}
 	}
+
+	ASSERT_EQ(numSections, (size_t)(totalTasks2 / bandwidth2));
 }
 
 int main(int argc, const char **argv)
