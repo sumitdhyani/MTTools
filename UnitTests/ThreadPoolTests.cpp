@@ -9,7 +9,7 @@ struct ThreadPoolTests : ::testing::Test
 	int totalTasks;
 	std::atomic<int> taskExecutionCounter;
 	std::chrono::milliseconds sleepInterval;
-	size_t numCores;
+	uint numCores;
 
 	virtual void SetUp()
 	{
