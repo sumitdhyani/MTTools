@@ -1,7 +1,2 @@
-rm -fr ./build
 rm -fr ./CommonUtils
-mkdir build
-cd build
-cmake ..
-make
-cd ..
+git clone https://github.com/sumitdhyani/CommonUtils.git
