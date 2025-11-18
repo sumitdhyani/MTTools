@@ -3,18 +3,19 @@ Provides object oriented interface for multithreading applications. The library 
 
 ## Build:
 
-**There is nothing to build as the whole library is header-only if you don't want to build/run Unit Tests**
+There is nothing to build as the whole library is header-only if you don't want to build/run Unit Tests.
+However, it does some 3rd party code, so please run setup.bat/setup.sh and you are ready to go.
 
-## To build unit tests, following are the prerequisites:
+## To build amn run unit tests, following are the prerequisites:
 - CMake(3.5.0+)
 - GTest, environment variable **GTEST_ROOT** should be set to the googletest source directory root
 - On windows clang with C++20 support
 - On linux g++ with C++20 support
   
-If all the prerequisites are met then just go to the root directory and run the setup.sh/setup.bat for linux/windows and you're ready to go.
+If all the prerequisites are met then just go to the root directory and run the setup.sh/setup.bat for linux/windows and then build.sh/build.bat and you're ready to go.
 
 ## Overview of functionalities provided:
-### Following are the classes which may be used by the client applications:
+### Following are the cla sses which may be used by the client applications:
   - **WorkerThread:**
     - An interface to execute tasks in a separate thread, all tasks executed using this interface are     guaranteed to execute in the same thread. See unitTests/WorkerThreadTests.cpp for examples.
   - **TaskScheduler:**
