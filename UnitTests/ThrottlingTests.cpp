@@ -30,7 +30,7 @@ struct ThrottlingTests : ::testing::Test
 struct ReusableThrottlerTests : ::testing::Test 
 {};
 
-TEST_F(ThrottlingTests, DISABLED_SingleThreaded)
+TEST_F(ThrottlingTests, SingleThreaded)
 {
 	mt::ThrottledWorkerThread throttler(unitTime, numTasksPerUnitTime);
 	mtInternal::ConditionVariable cond;
@@ -78,7 +78,7 @@ TEST_F(ThrottlingTests, DISABLED_SingleThreaded)
 	}
 }
 
-TEST_F(ThrottlingTests, DISABLED_TestPushingTasksFromMultipleThreads)
+TEST_F(ThrottlingTests, TestPushingTasksFromMultipleThreads)
 {
 	mt::ThrottledWorkerThread throttler(unitTime, numTasksPerUnitTime);
 	mtInternal::ConditionVariable cond;
@@ -148,10 +148,10 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 	// bandWidth[i] 			= bandWidth of throttlers[i]
 	// execTimeStamps[i] 	= execLog for throttlers[i]
 	// numTasks[i]				= total tasks to be executed by throttlers[i]
-	std::array<duration, numThrottlers> unitTimes = {oneSec, oneSec, oneSec, oneSec};
-	std::array<size_t, numThrottlers> bandWidths = {1000, 2000, 30000, 4000};
-	std::array<std::vector<time_point>, numThrottlers> execTimeStamps;
-	std::array<size_t, numThrottlers> numTasks;
+	duration unitTimes[numThrottlers] = {oneSec, oneSec, oneSec, oneSec};
+	size_t bandWidths[numThrottlers] = {1000, 2000, 30000, 4000};
+	std::vector<time_point> execTimeStamps[numThrottlers];
+	size_t numTasks[numThrottlers];
 
 	// total tasks to be executed by all the throttlers combined
 	size_t totalTasks = 0;
@@ -164,7 +164,7 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 		totalTasks += bandWidths[i] * 10;
 	}
 
-	std::array<std::unique_ptr<mt::ReusableThrottledWorkerThread>, numThrottlers> throttlers;
+	std::unique_ptr<mt::ReusableThrottledWorkerThread> throttlers[numThrottlers];
 
 	for (size_t i = 0; i < numThrottlers; ++i)
 	{
@@ -285,10 +285,10 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 	// bandWidth[i] 			= bandWidth of throttlers[i]
 	// execTimeStamps[i] 	= execLog for throttlers[i]
 	// numTasks[i]				= total tasks to be executed by throttlers[i]
-	std::array<duration, numThrottlers> unitTimes = {oneSec, oneSec, oneSec, oneSec};
-	std::array<size_t, numThrottlers> bandWidths = {1000, 2000, 30000, 4000};
-	std::array<std::vector<time_point>, numThrottlers> execTimeStamps;
-	std::array<size_t, numThrottlers> numTasks;
+	duration unitTimes[numThrottlers] = {oneSec, oneSec, oneSec, oneSec};
+	size_t bandWidths[numThrottlers] = {1000, 2000, 30000, 4000};
+	std::vector<time_point> execTimeStamps[numThrottlers];
+	size_t numTasks[numThrottlers];
 
 	// total tasks to be executed by all the throttlers combined
 	size_t totalTasks = 0;
@@ -301,7 +301,7 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 		totalTasks += bandWidths[i] * 10;
 	}
 
-	std::array<std::unique_ptr<mt::ReusableThrottledWorkerThread>, numThrottlers> throttlers;
+	std::unique_ptr<mt::ReusableThrottledWorkerThread> throttlers[numThrottlers];
 
 	for (size_t i = 0; i < numThrottlers; ++i)
 	{
