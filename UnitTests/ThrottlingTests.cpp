@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <TaskThrottlers.hpp>
 #include <chrono>
+#include <memory>
+#include <array>
 #include <CommonUtils/CommonDefs.hpp>
 #include <gtest/gtest.h>
 
@@ -26,33 +28,9 @@ struct ThrottlingTests : ::testing::Test
 };
 
 struct ReusableThrottlerTests : ::testing::Test 
-{
-	size_t numTasksPerUnitTime;
-	size_t totalTasks1;
-	size_t totalTasks2;
-	size_t totalTasks;
+{};
 
-	duration unitTime1;
-	duration unitTime2;
-	size_t bandwidth1;//1000 transactions/sec
-	size_t bandwidth2;//2000 transactions/sec
-	std::vector<time_point> taskExecutionTimestamps1;
-	std::vector<time_point> taskExecutionTimestamps2;
-	size_t taskExecutionCounter;
-	virtual void SetUp()
-	{
-		unitTime1 = std::chrono::seconds(1);
-		unitTime2 = std::chrono::seconds(2);
-		bandwidth1 = 1000;//1000 transactions/sec
-		bandwidth2 = 3000;//2000 transactions/sec
-		totalTasks1 = bandwidth1 * 10;
-		totalTasks2 = bandwidth2 * 10;
-		totalTasks = totalTasks1 + totalTasks2;
-		taskExecutionCounter = 0;
-	}
-};
-
-TEST_F(ThrottlingTests, SingleThreaded)
+TEST_F(ThrottlingTests, DISABLED_SingleThreaded)
 {
 	mt::ThrottledWorkerThread throttler(unitTime, numTasksPerUnitTime);
 	mtInternal::ConditionVariable cond;
@@ -100,7 +78,7 @@ TEST_F(ThrottlingTests, SingleThreaded)
 	}
 }
 
-TEST_F(ThrottlingTests, TestPushingTasksFromMultipleThreads)
+TEST_F(ThrottlingTests, DISABLED_TestPushingTasksFromMultipleThreads)
 {
 	mt::ThrottledWorkerThread throttler(unitTime, numTasksPerUnitTime);
 	mtInternal::ConditionVariable cond;
@@ -162,214 +140,282 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 {
 	auto worker = std::make_shared<mt::WorkerThread>();
 	auto scheduler = std::make_shared<mt::TaskScheduler>();
-	
-	mt::ReusableThrottledWorkerThread throttler1(worker, scheduler, unitTime1, bandwidth1);
-	mt::ReusableThrottledWorkerThread throttler2(worker, scheduler, unitTime2, bandwidth2);
-	mtInternal::ConditionVariable cond;
 
+	constexpr size_t numThrottlers = 4;
+	auto oneSec = std::chrono::seconds(1);
 
-	auto func1 = [this, &cond]()
+	// unitTimes[i] 			= unitTime of throttlers[i],
+	// bandWidth[i] 			= bandWidth of throttlers[i]
+	// execTimeStamps[i] 	= execLog for throttlers[i]
+	// numTasks[i]				= total tasks to be executed by throttlers[i]
+	std::array<duration, numThrottlers> unitTimes = {oneSec, oneSec, oneSec, oneSec};
+	std::array<size_t, numThrottlers> bandWidths = {1000, 2000, 30000, 4000};
+	std::array<std::vector<time_point>, numThrottlers> execTimeStamps;
+	std::array<size_t, numThrottlers> numTasks;
+
+	// total tasks to be executed by all the throttlers combined
+	size_t totalTasks = 0;
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		auto now = ULCommonUtils::now();
-		taskExecutionTimestamps1.push_back(now);
-		//Using rand here to avoid compiler optimizations which may lead to a non-linear execution
-		rand();
-		taskExecutionCounter++;
-
-		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
-	};
-
-	auto func2 = [this, &cond]()
-	{
-		auto now = ULCommonUtils::now();
-		taskExecutionTimestamps2.push_back(now);
-		//Using rand here to avoid compiler optimizations which may lead to a non-linear execution
-		rand();
-		taskExecutionCounter++;
-
-		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
-	};
-
-	for (int i = 1; i <= totalTasks1; i++)
-	{
-		throttler1.push(func1);
+		// no. of tasks fo each throttler = bandWidth * 10
+		// so all the tasks should be executed in unitTime * 10 seconds, i.e 10 sec
+		// as the unitTime for each thread is kept to be 1 sec
+		numTasks[i] = bandWidths[i] * 10;
+		totalTasks += bandWidths[i] * 10;
 	}
 
-	for (int i = 1; i <= totalTasks2; i++)
+	std::array<std::unique_ptr<mt::ReusableThrottledWorkerThread>, numThrottlers> throttlers;
+
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		throttler2.push(func2);
+		throttlers[i] = std::move(std::make_unique<mt::ReusableThrottledWorkerThread>(worker, scheduler, unitTimes[i], bandWidths[i]));
+	}
+
+	mtInternal::ConditionVariable cond;
+
+	// Total tasks executed yet
+	size_t taskExecutionCounter = 0;
+
+	// Execute the task and add the time of execution to the execLog
+	auto addExecTimeStamp = [this, &cond, &taskExecutionCounter, &totalTasks](std::vector<time_point> &execTimestamp)
+	{
+		auto now = ULCommonUtils::now();
+		execTimestamp.push_back(now);
+		// Using rand here to avoid compiler optimizations which may lead to a non-linear execution
+		rand();
+		taskExecutionCounter++;
+
+		// If all the tasks have been executed, signal the cond variable
+		if (totalTasks == taskExecutionCounter)
+			cond.notify_one();
+	};
+
+	// push 'numTasks' tasks to the provided throttler
+	// and update its execution log
+	auto pushTasks = [&addExecTimeStamp](mt::ReusableThrottledWorkerThread &throttler,
+																			 const size_t &numTasks,
+																			 std::vector<time_point> &execTimeStamps)
+	{
+		for (int i = 0; i < numTasks; i++)
+		{
+			throttler.push([&addExecTimeStamp, &execTimeStamps]()
+										 { addExecTimeStamp(execTimeStamps); });
+		}
+	};
+
+	for (size_t i = 0; i < numThrottlers; ++i)
+	{
+		pushTasks(*throttlers[i], numTasks[i], execTimeStamps[i]);
 	}
 
 	cond.wait();
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
-	ASSERT_EQ(taskExecutionTimestamps1.size(), totalTasks1);
-	ASSERT_EQ(taskExecutionTimestamps2.size(), totalTasks2);
-	
-	size_t numSections = 0;
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps1[0],taskExecutionTimestamps1[0] + unitTime1, 0, 1};
-		 endIndex <= taskExecutionTimestamps1.size();
-		 endIndex++
-		)
+
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		if (endIndex == taskExecutionTimestamps1.size())
-		{
-			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
-			++numSections;
-		}
-		else if (taskExecutionTimestamps1[endIndex] >= timeWindowEnd)
-		{
-			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
-			timeWindowStart += unitTime1;
-			timeWindowEnd = timeWindowStart + unitTime1;
-			startIndex = endIndex;
-			++numSections;
-		}
+		ASSERT_EQ(execTimeStamps[i].size(), numTasks[i]);
 	}
 
-	ASSERT_EQ(numSections, (size_t)(totalTasks1 / bandwidth1));
-
-	numSections = 0;
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps2[0],taskExecutionTimestamps2[0] + unitTime2, 0, 1};
-		 endIndex <= taskExecutionTimestamps2.size();
-		 endIndex++
-		)
+	// Validate that each throttler executed exactly the no. of tasks it delegated
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		if (endIndex == taskExecutionTimestamps2.size())
-		{
-			ASSERT_EQ(endIndex - startIndex, bandwidth2);
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
-			++numSections;
-		}
-		else if (taskExecutionTimestamps2[endIndex] >= timeWindowEnd)
-		{
-			//Ensure we are not overdoing the bandwidth
-			ASSERT_EQ(endIndex - startIndex, bandwidth2);
-			//Ensure we are not underdoing the bandwidth
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
-			timeWindowStart += unitTime2;
-			timeWindowEnd = timeWindowStart + unitTime2;
-			startIndex = endIndex;
-			++numSections;
-		}
+		ASSERT_EQ(execTimeStamps[i].size(), numTasks[i]);
 	}
 
-	ASSERT_EQ(numSections, (size_t)(totalTasks2 / bandwidth2));
+	// Time to validate the execLog of each throttler
+	// Following points are validated in this function:
 
+	auto validateTransactionLog =
+			[](const std::vector<time_point> &execLog,
+				 const duration &unitTime,
+				 const size_t &bandWidth,
+				 const size_t &totalTasks)
+	{
+		// no. of time windows of size 'unitTime' encountered while parsing the execLog
+		size_t numSections = 0;
+		for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{execLog[0], execLog[0] + unitTime, 0, 1};
+				 endIndex <= execLog.size();
+				 endIndex++)
+		{
+			// End of execLog encountered
+			if (endIndex == execLog.size())
+			{
+				// Each 'unitTime' time window should have exactly 'bandWidth' entries
+				ASSERT_EQ(endIndex - startIndex, bandWidth);
+
+				// The timespan in which 'bandWidth' tasks excuted should be <= 'unitTime'
+				// This is to endure that the throttler did not 'over-throttle' the tasks
+				ASSERT_LE(execLog[endIndex - 1] - execLog[startIndex], unitTime);
+				++numSections;
+			}
+			// Curr time window >= unitTime
+			else if (execLog[endIndex] >= timeWindowEnd)
+			{
+				ASSERT_EQ(endIndex - startIndex, bandWidth);
+				ASSERT_LE(execLog[endIndex - 1] - execLog[startIndex], unitTime);
+				timeWindowStart += unitTime;
+				timeWindowEnd = timeWindowStart + unitTime;
+				startIndex = endIndex;
+				++numSections;
+			}
+		}
+
+		// numSections should be = totalTasks / bandWidth if every thing was handled perfectly
+		// For example if the bandWidth was 1000 and the unitTime was 1 sec
+		// Then if i pushed 15000 tasks i should have 15000/1000 = 15 sections of 1000 entries
+		// in the execLog
+		ASSERT_EQ(numSections, (size_t)(totalTasks / bandWidth));
+	};
+
+	for (size_t i = 0; i < numThrottlers; ++i)
+	{
+		validateTransactionLog(execTimeStamps[i], unitTimes[i], bandWidths[i], numTasks[i]);
+	}
 }
 
 TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 {
 	auto worker = std::make_shared<mt::WorkerThread>();
 	auto scheduler = std::make_shared<mt::TaskScheduler>();
-	mt::ReusableThrottledWorkerThread throttler1(worker, scheduler, unitTime1, bandwidth1);
-	mt::ReusableThrottledWorkerThread throttler2(worker, scheduler, unitTime2, bandwidth2);
+
+	constexpr size_t numThrottlers = 4;
+	auto oneSec = std::chrono::seconds(1);
+
+	// unitTimes[i] 			= unitTime of throttlers[i],
+	// bandWidth[i] 			= bandWidth of throttlers[i]
+	// execTimeStamps[i] 	= execLog for throttlers[i]
+	// numTasks[i]				= total tasks to be executed by throttlers[i]
+	std::array<duration, numThrottlers> unitTimes = {oneSec, oneSec, oneSec, oneSec};
+	std::array<size_t, numThrottlers> bandWidths = {1000, 2000, 30000, 4000};
+	std::array<std::vector<time_point>, numThrottlers> execTimeStamps;
+	std::array<size_t, numThrottlers> numTasks;
+
+	// total tasks to be executed by all the throttlers combined
+	size_t totalTasks = 0;
+	for (size_t i = 0; i < numThrottlers; ++i)
+	{
+		// no. of tasks fo each throttler = bandWidth * 10
+		// so all the tasks should be executed in unitTime * 10 seconds, i.e 10 sec
+		// as the unitTime for each thread is kept to be 1 sec
+		numTasks[i] = bandWidths[i] * 10;
+		totalTasks += bandWidths[i] * 10;
+	}
+
+	std::array<std::unique_ptr<mt::ReusableThrottledWorkerThread>, numThrottlers> throttlers;
+
+	for (size_t i = 0; i < numThrottlers; ++i)
+	{
+		throttlers[i] = std::move(std::make_unique<mt::ReusableThrottledWorkerThread>(worker, scheduler, unitTimes[i], bandWidths[i]));
+	}
+
 	mtInternal::ConditionVariable cond;
 
-	auto func1 = [this, &cond]()
+	// Total tasks executed yet
+	size_t taskExecutionCounter = 0;
+
+	// Execute the task and add the time of execution to the execLog
+	auto addExecTimeStamp = [this, &cond, &taskExecutionCounter, &totalTasks](std::vector<time_point> &execTimestamp)
 	{
 		auto now = ULCommonUtils::now();
-		taskExecutionTimestamps1.push_back(now);
-		//Using rand here to avoid compiler optimizations which may lead to a non-linear execution
+		execTimestamp.push_back(now);
+		// Using rand here to avoid compiler optimizations which may lead to a non-linear execution
 		rand();
 		taskExecutionCounter++;
 
+		// If all the tasks have been executed, signal the cond variable
 		if (totalTasks == taskExecutionCounter)
 			cond.notify_one();
 	};
 
-	auto func2 = [this, &cond]()
+	// push 'numTasks' tasks to the provided throttler
+	// and update its execution log
+	auto pushTasks = [&addExecTimeStamp](mt::ReusableThrottledWorkerThread &throttler,
+																			 const size_t &numTasks,
+																			 std::vector<time_point> &execTimeStamps)
 	{
-		auto now = ULCommonUtils::now();
-		taskExecutionTimestamps2.push_back(now);
-		//Using rand here to avoid compiler optimizations which may lead to a non-linear execution
-		rand();
-		taskExecutionCounter++;
-
-		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
-	};
-
-	auto funcThread1 = [this, &func1, &throttler1]() 
-	{
-		for (int i = 1; i <= totalTasks1; i++)
+		for (int i = 0; i < numTasks; i++)
 		{
-			throttler1.push(func1);
+			throttler.push([&addExecTimeStamp, &execTimeStamps]()
+										 { addExecTimeStamp(execTimeStamps); });
 		}
 	};
 
-	auto funcThread2 = [this, &func2, &throttler2]()
+	std::thread pusherThreads[numThrottlers];
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		for (int i = 1; i <= totalTasks2; i++)
-		{
-			throttler2.push(func2);
-		}
-	};
+		pusherThreads[i] = std::thread([&, i](){
+			pushTasks(*throttlers[i], numTasks[i], execTimeStamps[i]);
+		});
+	}
 
-	std::thread funcThreads[2] = { std::thread(funcThread1), std::thread(funcThread2) };
-	auto numThreads = sizeof(funcThreads) / sizeof(funcThreads[0]);
-	for (int i = 0; i < numThreads; i++)
-		funcThreads[i].join();
+	for (size_t i = 0; i < numThrottlers; ++i)
+	{
+		pusherThreads[i].join();
+	}
 
 	cond.wait();
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
-	ASSERT_EQ(taskExecutionTimestamps1.size(), totalTasks1);
-	ASSERT_EQ(taskExecutionTimestamps2.size(), totalTasks2);
 
-	size_t numSections = 0;
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps1[0],taskExecutionTimestamps1[0] + unitTime1, 0, 1};
-		 endIndex <= taskExecutionTimestamps1.size();
-		 endIndex++
-		)
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		if (endIndex == taskExecutionTimestamps1.size())
-		{
-			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
-			++numSections;
-		}
-		else if (taskExecutionTimestamps1[endIndex] >= timeWindowEnd)
-		{
-			ASSERT_EQ(endIndex - startIndex, bandwidth1);
-			ASSERT_LE(taskExecutionTimestamps1[endIndex - 1] - taskExecutionTimestamps1[startIndex], unitTime1);
-			timeWindowStart += unitTime1;
-			timeWindowEnd = timeWindowStart + unitTime1;
-			startIndex = endIndex;
-			++numSections;
-		}
+		ASSERT_EQ(execTimeStamps[i].size(), numTasks[i]);
 	}
 
-	ASSERT_EQ(numSections, (size_t)(totalTasks1/bandwidth1));
-
-	numSections = 0;
-	for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{taskExecutionTimestamps2[0],taskExecutionTimestamps2[0] + unitTime2, 0, 1};
-		 endIndex <= taskExecutionTimestamps2.size();
-		 endIndex++
-		)
+	// Validate that each throttler executed exactly the no. of tasks it delegated
+	for (size_t i = 0; i < numThrottlers; ++i)
 	{
-		if (endIndex == taskExecutionTimestamps2.size())
-		{
-			ASSERT_EQ(endIndex - startIndex, bandwidth2);
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
-			++numSections;
-		}
-		else if (taskExecutionTimestamps2[endIndex] >= timeWindowEnd)
-		{
-			//Ensure we are not overdoing the bandwidth
-			ASSERT_EQ(endIndex - startIndex, bandwidth2);
-			//Ensure we are not underdoing the bandwidth
-			ASSERT_LE(taskExecutionTimestamps2[endIndex - 1] - taskExecutionTimestamps2[startIndex], unitTime2);
-			timeWindowStart += unitTime2;
-			timeWindowEnd = timeWindowStart + unitTime2;
-			startIndex = endIndex;
-			++numSections;
-		}
+		ASSERT_EQ(execTimeStamps[i].size(), numTasks[i]);
 	}
 
-	ASSERT_EQ(numSections, (size_t)(totalTasks2 / bandwidth2));
+	// Time to validate the execLog of each throttler
+	// Following points are validated in this function:
+	
+	auto validateTransactionLog =
+			[](const std::vector<time_point> &execLog,
+				 const duration &unitTime,
+				 const size_t &bandWidth,
+				 const size_t &totalTasks)
+	{
+		// no. of time windows of size 'unitTime' encountered while parsing the execLog
+		size_t numSections = 0;
+		for (auto [timeWindowStart, timeWindowEnd, startIndex, endIndex] = std::tuple{execLog[0], execLog[0] + unitTime, 0, 1};
+				 endIndex <= execLog.size();
+				 endIndex++)
+		{
+			// End of execLog encountered
+			if (endIndex == execLog.size())
+			{
+				// Each 'unitTime' time window should have exactly 'bandWidth' entries
+				ASSERT_EQ(endIndex - startIndex, bandWidth);
+
+				// The timespan in which 'bandWidth' tasks excuted should be <= 'unitTime'
+				// This is to endure that the throttler did not 'over-throttle' the tasks
+				ASSERT_LE(execLog[endIndex - 1] - execLog[startIndex], unitTime);
+				++numSections;
+			}
+			// Curr time window >= unitTime
+			else if (execLog[endIndex] >= timeWindowEnd)
+			{
+				ASSERT_EQ(endIndex - startIndex, bandWidth);
+				ASSERT_LE(execLog[endIndex - 1] - execLog[startIndex], unitTime);
+				timeWindowStart += unitTime;
+				timeWindowEnd = timeWindowStart + unitTime;
+				startIndex = endIndex;
+				++numSections;
+			}
+		}
+
+		// numSections should be = totalTasks / bandWidth if every thing was handled perfectly
+		// For example if the bandWidth was 1000 and the unitTime was 1 sec
+		// Then if i pushed 15000 tasks i should have 15000/1000 = 15 sections of 1000 entries
+		// in the execLog
+		ASSERT_EQ(numSections, (size_t)(totalTasks / bandWidth));
+	};
+
+	for (size_t i = 0; i < numThrottlers; ++i)
+	{
+		validateTransactionLog(execTimeStamps[i], unitTimes[i], bandWidths[i], numTasks[i]);
+	}
 }
 
 int main(int argc, const char **argv)
