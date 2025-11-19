@@ -27,7 +27,7 @@ namespace mtInternalUtils
 	private:
 		ConsumerQueue m_queue;
 		stdMutex m_mutex;
-		ConditionVariable m_cond;
+		stdConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
 		bool m_consumerWaiting;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		std::function<void(const T&)> m_processor;
@@ -245,7 +245,7 @@ namespace mtInternalUtils
 	private:
 		ConsumerQueue m_queue;
 		stdMutex m_mutex;
-		ConditionVariable m_cond;
+		stdConditionVariable m_cond;
 		std::atomic<bool> m_terminate;
 		bool m_consumerBusy;//Used to avoid unnecessary signalling of consumer if it is busy processing the queue, purely performance
 		stdThread m_thread;
