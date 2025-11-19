@@ -6,7 +6,7 @@
 
 namespace mtInternalUtils
 {
-	class ConditionVariable
+	class ConditionVariable final
 	{
 		stdConditionVariable m_cond;
 		std::mutex m_mutex;
@@ -90,5 +90,4 @@ namespace mtInternalUtils
 			m_cond.notify_all();
 		}
 	};
-	DEFINE_PTR(ConditionVariable)
 }

@@ -30,18 +30,18 @@ namespace ULMTTools
 
 	class ReusableThrottledWorkerThread
 	{
-		typedef mtInternalUtils::ReusableThrottler<Task> ReusableThrottler;
+		typedef mtInternalUtils::ReusableThrottler<Task, WorkerThread, TaskScheduler> ReusableThrottler;
 		ReusableThrottler m_throttler;
 	public:
 		ReusableThrottledWorkerThread(const std::shared_ptr<WorkerThread>& worker,
 																	const std::shared_ptr<TaskScheduler> taskScheduler,
 																	const duration& unitTime,
 																	const size_t& numTransactions)
-			:m_throttler([worker](const Task& task) { worker->push(task); },
-										[taskScheduler](const time_point& scheduleTime, const Task& task) { taskScheduler->push(scheduleTime, task); },
-										[](Task task) { task(); },
-										unitTime,
-										numTransactions)
+			:m_throttler(worker,
+									 taskScheduler,
+									 [](Task task) { task(); },
+									 unitTime,
+									 numTransactions)
 		{
 		}
 

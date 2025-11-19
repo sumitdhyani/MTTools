@@ -16,9 +16,9 @@ namespace ULMTTools
 		{
 		}
 
-		void push(const Task& task)
+		bool push(const Task& task)
 		{
-			m_consumer.push(task);
+			return m_consumer.push(task);
 		}
 
 		//returns number of pending tasks 
@@ -32,5 +32,4 @@ namespace ULMTTools
 			m_consumer.kill();
 		}
 	};
-	DEFINE_PTR(WorkerThread)
 }
