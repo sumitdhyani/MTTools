@@ -22,7 +22,7 @@ struct WorkerThreadTests : ::testing::Test
 TEST_F(WorkerThreadTests, TestPushingTasksFromSingleThread)
 {
 	mt::WorkerThread worker;
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	auto func = [this, &cond]()
 	{
@@ -30,13 +30,13 @@ TEST_F(WorkerThreadTests, TestPushingTasksFromSingleThread)
 		rand();
 		taskExecutionCounter++;
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	for (int i = 1; i <= totalTasks; i++)
 		worker.push(func);
 
-	cond.wait();
+	cond.acquire();
 	//Wait should end only when all tasks have executed
 	ASSERT_EQ(totalTasks, taskExecutionCounter.load());
 }
@@ -44,7 +44,7 @@ TEST_F(WorkerThreadTests, TestPushingTasksFromSingleThread)
 TEST_F(WorkerThreadTests, TestPushingTasksFromMultipleThreads)
 {
 	mt::WorkerThread worker;
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	auto func = [this, &cond]()
 	{
@@ -52,7 +52,7 @@ TEST_F(WorkerThreadTests, TestPushingTasksFromMultipleThreads)
 		rand();
 		taskExecutionCounter++;
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	std::thread threads[4];
@@ -68,7 +68,7 @@ TEST_F(WorkerThreadTests, TestPushingTasksFromMultipleThreads)
 	for (int i = 0; i < 4; i++)
 		threads[i].join();
 
-	cond.wait();
+	cond.acquire();
 
 	//Wait should end only when all tasks have executed
 	ASSERT_EQ(totalTasks, taskExecutionCounter.load());
@@ -78,7 +78,7 @@ TEST_F(WorkerThreadTests, TestKillByDestruction)
 {
 	{
 		mt::WorkerThread worker;
-		mtInternal::ConditionVariable cond;
+		std::binary_semaphore cond(0);
 
 		auto func = [this, &cond]()
 		{

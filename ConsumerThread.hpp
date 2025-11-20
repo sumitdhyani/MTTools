@@ -3,13 +3,14 @@
 #include <queue>
 #include <map>
 #include <mutex>
+#include <semaphore>
 #include <atomic>
 #include <chrono>
 #include <thread>
 #include <memory>
 #include <concepts>
 #include <CommonUtils/RingBuffer.hpp>
-#include "ConditionVariable.hpp"
+//#include "ConditionVariable.hpp"
 
 typedef std::function<void()> Task;
 
@@ -156,7 +157,7 @@ namespace mtInternalUtils
 	private:
 		ConsumerQueue m_itemQueue;
 		stdMutex m_mutex;
-		ConditionVariable m_cond;
+		std::binary_semaphore m_semaphore;
 		std::map<time_point, std::vector<T>> m_processingQueue;
 		std::atomic<bool> m_terminate;
 		std::function<void(const T&)> m_processor;
@@ -164,12 +165,10 @@ namespace mtInternalUtils
 
 		void kill()
 		{
-			stdUniqueLock lock(m_mutex);
 			if (!m_terminate)
 			{
 				m_terminate = true;
-				lock.unlock();//Ugly but necessary
-				m_cond.notify_one();
+				m_semaphore.release();
 				m_thread.join();
 			}
 		}
@@ -178,6 +177,7 @@ namespace mtInternalUtils
 		Scheduler(const std::function<void(const T&)> &processor)
 				: m_processor(processor),
 					m_terminate(false),
+					m_semaphore(0),
 					m_thread(stdThread([this](){ run(); }))
 		{}
 
@@ -188,7 +188,7 @@ namespace mtInternalUtils
 				m_itemQueue.emplace_back(t, item);
 			}
 
-			m_cond.notify_one();
+			m_semaphore.release();
 		}
 
 		void run()
@@ -219,11 +219,11 @@ namespace mtInternalUtils
 
 				if (auto it = m_processingQueue.begin(); it == m_processingQueue.end())
 				{
-					m_cond.wait();
+					m_semaphore.acquire();
 				}
 				else
 				{
-					m_cond.wait_until(it->first);
+					m_semaphore.try_acquire_until(it->first);
 				}
 			}
 		}

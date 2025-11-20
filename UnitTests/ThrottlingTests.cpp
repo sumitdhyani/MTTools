@@ -33,7 +33,7 @@ struct ReusableThrottlerTests : ::testing::Test
 TEST_F(ThrottlingTests, SingleThreaded)
 {
 	mt::ThrottledWorkerThread throttler(unitTime, numTasksPerUnitTime);
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	auto func = [this, &cond]()
 	{
@@ -45,7 +45,7 @@ TEST_F(ThrottlingTests, SingleThreaded)
 		taskExecutionCounter++;
 
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	for (int i = 1; i <= totalTasks; i++)
@@ -53,7 +53,7 @@ TEST_F(ThrottlingTests, SingleThreaded)
 		throttler.push(func);
 	}
 
-	cond.wait();
+	cond.acquire();
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
 	ASSERT_EQ(taskExecutionTimestamps.size(), totalTasks);
 	
@@ -81,7 +81,7 @@ TEST_F(ThrottlingTests, SingleThreaded)
 TEST_F(ThrottlingTests, TestPushingTasksFromMultipleThreads)
 {
 	mt::ThrottledWorkerThread throttler(unitTime, numTasksPerUnitTime);
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	auto func = [this, &cond]()
 	{
@@ -93,7 +93,7 @@ TEST_F(ThrottlingTests, TestPushingTasksFromMultipleThreads)
 		taskExecutionCounter++;
 
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	std::thread threads[4];
@@ -111,7 +111,7 @@ TEST_F(ThrottlingTests, TestPushingTasksFromMultipleThreads)
 	for (int i = 0; i < numThreads; i++)
 		threads[i].join();
 
-	cond.wait();
+	cond.acquire();
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
 	ASSERT_EQ(taskExecutionTimestamps.size(), totalTasks);
 	
@@ -171,7 +171,7 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 		throttlers[i] = std::move(std::make_unique<mt::ReusableThrottledWorkerThread>(worker, scheduler, unitTimes[i], bandWidths[i]));
 	}
 
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	// Total tasks executed yet
 	size_t taskExecutionCounter = 0;
@@ -187,7 +187,7 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 
 		// If all the tasks have been executed, signal the cond variable
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	// push 'numTasks' tasks to the provided throttler
@@ -208,7 +208,7 @@ TEST_F(ReusableThrottlerTests, SingleThreaded)
 		pushTasks(*throttlers[i], numTasks[i], execTimeStamps[i]);
 	}
 
-	cond.wait();
+	cond.acquire();
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
 
 	for (size_t i = 0; i < numThrottlers; ++i)
@@ -308,7 +308,7 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 		throttlers[i] = std::move(std::make_unique<mt::ReusableThrottledWorkerThread>(worker, scheduler, unitTimes[i], bandWidths[i]));
 	}
 
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	// Total tasks executed yet
 	size_t taskExecutionCounter = 0;
@@ -324,7 +324,7 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 
 		// If all the tasks have been executed, signal the cond variable
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	// push 'numTasks' tasks to the provided throttler
@@ -353,7 +353,7 @@ TEST_F(ReusableThrottlerTests, TestPushingTasksFromMultipleThreads)
 		pusherThreads[i].join();
 	}
 
-	cond.wait();
+	cond.acquire();
 	ASSERT_EQ(taskExecutionCounter, totalTasks);
 
 	for (size_t i = 0; i < numThrottlers; ++i)

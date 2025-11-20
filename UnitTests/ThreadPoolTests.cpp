@@ -23,7 +23,7 @@ struct ThreadPoolTests : ::testing::Test
 TEST_F(ThreadPoolTests, TestPushingTasksFromSingleThread)
 {
 	mt::ThreadPool worker(numCores);
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	auto func = [this, &cond]()
 	{
@@ -31,13 +31,13 @@ TEST_F(ThreadPoolTests, TestPushingTasksFromSingleThread)
 		rand();
 		taskExecutionCounter++;
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	for (int i = 1; i <= totalTasks; i++)
 		worker.push(func);
 
-	cond.wait();
+	cond.acquire();
 	//Wait should end only when all tasks have executed
 	ASSERT_EQ(totalTasks, taskExecutionCounter.load());
 }
@@ -45,7 +45,7 @@ TEST_F(ThreadPoolTests, TestPushingTasksFromSingleThread)
 TEST_F(ThreadPoolTests, TestPushingTasksFromMultipleThreads)
 {
 	mt::ThreadPool worker(numCores);
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 
 	auto func = [this, &cond]()
 	{
@@ -53,7 +53,7 @@ TEST_F(ThreadPoolTests, TestPushingTasksFromMultipleThreads)
 		rand();
 		taskExecutionCounter++;
 		if (totalTasks == taskExecutionCounter)
-			cond.notify_one();
+			cond.release();
 	};
 
 	std::thread threads[4];
@@ -69,7 +69,7 @@ TEST_F(ThreadPoolTests, TestPushingTasksFromMultipleThreads)
 	for (int i = 0; i < 4; i++)
 		threads[i].join();
 
-	cond.wait();
+	cond.acquire();
 
 	//Wait should end only when all tasks have executed
 	ASSERT_EQ(totalTasks, taskExecutionCounter.load());
@@ -79,7 +79,7 @@ TEST_F(ThreadPoolTests, PerformanceVsSingleThreaded)
 {
 	uint8_t numThreads = 4;
 	mt::ThreadPool threadPool(numThreads);
-	mtInternal::ConditionVariable cond;
+	std::binary_semaphore cond(0);
 	std::atomic<size_t> numTasksExecutedTillNow = 0;
 
 	auto func = [&cond, &numTasksExecutedTillNow](size_t totalTasks , size_t numRepetetions, bool notify)
@@ -92,7 +92,7 @@ TEST_F(ThreadPoolTests, PerformanceVsSingleThreaded)
 		numTasksExecutedTillNow++;
 
 		if ((totalTasks == numTasksExecutedTillNow.load()) && notify)
-			cond.notify_one();
+			cond.release();
 	};
 
 	auto performanceRatioMine = [&threadPool, &func, &cond, &numTasksExecutedTillNow](size_t totalTasks, size_t numRepetetionsPerTask)
@@ -101,7 +101,7 @@ TEST_F(ThreadPoolTests, PerformanceVsSingleThreaded)
 		auto start = now();
 		for (size_t i = 1; i <= totalTasks; i++)
 			threadPool.push(std::bind(func, totalTasks, numRepetetionsPerTask, true));
-		cond.wait();
+		cond.acquire();
 		auto t_threadPool = now() - start;
 
 		[&numTasksExecutedTillNow,&totalTasks](){ASSERT_EQ(numTasksExecutedTillNow.load(), totalTasks);}();
@@ -137,7 +137,7 @@ TEST_F(ThreadPoolTests, TestKillByDestruction)
 {
 	{
 		mt::ThreadPool worker(numCores);
-		mtInternal::ConditionVariable cond;
+		std::binary_semaphore cond(0);
 
 		auto func = [this, &cond]()
 		{

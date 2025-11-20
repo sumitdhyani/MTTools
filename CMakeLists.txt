@@ -37,8 +37,11 @@ else()
 	pthread)
 endif()
 
-set(ALL_SOURCES ConditionVariable.hpp
-TaskScheduler.hpp
+if(NOT TARGET CommonUtils)
+	execute_process(COMMAND git clone https://github.com/sumitdhyani/CommonUtils.git "${CMAKE_SOURCE_DIR}/CommonUtils")
+endif()
+
+set(ALL_SOURCES TaskScheduler.hpp
 TaskThrottlers.hpp
 Timer.hpp
 ConsumerThread.hpp
