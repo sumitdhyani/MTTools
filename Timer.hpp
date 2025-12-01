@@ -7,6 +7,7 @@ namespace ULMTTools
 {
 	class Timer
 	{
+		typedef std::function<void()> Task;
 		typedef std::pair<Task, duration> TaskDurationPair;
 
 		TaskScheduler_SPtr m_workerThread;
@@ -54,13 +55,14 @@ namespace ULMTTools
 			{
 				TaskDurationPair taskSchedulingInfo = it->second;
 
-				//Caution! a possible race condition is that just after unlock, the
-				//client code uninstalls the timer and the installed function is a member function
-				//if just after the uninstall, the object is deleted before the function completes execution, it can lead to a crash
-				//Alternate way to handle it would be to execute the predicate inside lock but then it 
-				//can will block the install function and the execution of other installed timers until
-				//the predicate finishes execution, this is more serious considering this is an api for scheduling tasks
-				//and this can make other timers miss their schedule
+				// Caution! a possible race condition is that just after unlock, the
+				// client code uninstalls the timer and the installed function is a member function
+				// if just after the uninstall, the object is deleted before the function completes execution, it can lead to a crash
+				// Alternate way to handle it would be to execute the predicate inside lock but then it 
+				// can block the installed function and the execution of other installed timers until
+				// the predicate finishes execution, this is more serious considering this is an api for scheduling tasks
+				// and this can make other timers miss their schedule
+				// 
 				lock.unlock();
 				taskSchedulingInfo.first();
 				auto newScheduledTime = scheduledTime + taskSchedulingInfo.second;

@@ -46,7 +46,9 @@ TaskThrottlers.hpp
 Timer.hpp
 ConsumerThread.hpp
 ThreadPool.hpp
-WorkerThread.hpp)
+WorkerThread.hpp
+Scheduler.hpp
+ThrottledConsumerThread.hpp)
 
 
 project(MTTools)

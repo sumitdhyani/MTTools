@@ -1,9 +1,9 @@
 #pragma once
-#include "WorkerThread.hpp"
+#include "Scheduler.hpp"
 
 namespace ULMTTools
 {
-	class TaskScheduler
+	class TaskScheduler final
 	{
 		typedef std::pair<time_point, Task> TimeTaskPair;
 		typedef mtInternalUtils::Scheduler<Task> Scheduler;
@@ -14,7 +14,7 @@ namespace ULMTTools
 		TaskScheduler() : m_timedConsumer([](Task task) {task(); })
 		{}
 
-		virtual void push(const time_point& t, const Task& task)
+		void push(const time_point& t, const Task& task)
 		{
 			m_timedConsumer.push(t, task);
 		}

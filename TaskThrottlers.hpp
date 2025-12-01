@@ -1,4 +1,5 @@
 #pragma once
+#include "ThrottledConsumerThread.hpp"
 #include "WorkerThread.hpp"
 #include "TaskScheduler.hpp"
 
@@ -13,7 +14,7 @@ namespace ULMTTools
 	public:
 
 		ThrottledWorkerThread(const duration& unitTime, const size_t& numTransactions)
-			:m_consumer([](Task task) {task(); }, unitTime, numTransactions)
+			:m_consumer([](const Task& task) { task(); }, unitTime, numTransactions)
 		{
 		}
 
@@ -39,7 +40,7 @@ namespace ULMTTools
 																	const size_t& numTransactions)
 			:m_throttler(worker,
 									 taskScheduler,
-									 [](Task task) { task(); },
+									 [](const Task& task) { task(); },
 									 unitTime,
 									 numTransactions)
 		{
