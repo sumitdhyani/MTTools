@@ -94,6 +94,24 @@ namespace mtInternalUtils
 			return true;
 		}
 
+		bool push(T&& item)
+		{
+			{
+				stdUniqueLock lock(m_mutex);
+				if (m_terminate) return false;
+
+				m_queue.push_back(std::move(item));
+
+				if (m_consumerWaiting)
+				{
+					lock.unlock();
+					m_cond.notify_one();
+				}
+			}
+
+			return true;
+		}
+
 		template <class... Args>
 		bool emplace(const Args&... args)
 		{

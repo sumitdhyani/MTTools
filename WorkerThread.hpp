@@ -21,6 +21,11 @@ namespace ULMTTools
 			return m_consumer.push(task);
 		}
 
+		bool push(Task&& task)
+		{
+			return m_consumer.push(std::move(task));
+		}
+
 		//returns number of pending tasks 
 		size_t size()
 		{
